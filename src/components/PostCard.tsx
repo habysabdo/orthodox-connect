@@ -37,6 +37,13 @@ import { PostShareModal } from './PostShareModal';
 import { LikesModal } from './LikesModal';
 import { ProfileLink } from './ProfileLink';
 
+// Helper function to strip raw URLs from post body text when media is embedded
+function stripUrls(text: string) {
+  if (!text) return '';
+  const urlRegex = /(https?:\/\/[^\s]+)/gi;
+  return text.replace(urlRegex, '').trim();
+}
+
 export function PostCard({ post }: { post: Post }) {
   const store = useStore();
   const { users, currentUserId, toggleLike, addComment, openThreadWith, flagPost, unflagPost, deletePost } = store;
@@ -53,8 +60,6 @@ export function PostCard({ post }: { post: Post }) {
   const articleRef = useRef<HTMLElement>(null);
   const [highlight, setHighlight] = useState(false);
 
-  // When a 'like' notification points here, scroll the post into view and flash
-  // a gold ring, then release the focus so a later like can trigger it again.
   useEffect(() => {
     if (focusedPostId !== post?.id) return;
     articleRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -68,9 +73,6 @@ export function PostCard({ post }: { post: Post }) {
 
   if (!post || !me || !author) return null;
 
-  // A re-share carries the original inside it and all engagement belongs to that
-  // original. Likes, comments, text and media are read through the helpers below
-  // because a post from the JSONB store may simply not have those fields.
   const engagementPost = post.originalPost ?? post;
   const originalAuthor = post.originalPost ? getUser(store, post.originalPost.authorId) : null;
   const likes = postLikes(engagementPost);
@@ -79,16 +81,19 @@ export function PostCard({ post }: { post: Post }) {
   const liked = isLikedBy(engagementPost, me.id);
   const isAdmin = hasAdminAccess(me);
   const isAuthor = post.authorId === me.id;
-  const bodyText = postText(post);
+  const rawBodyText = postText(post);
   const authorName = userName(author);
   const imageUrl = postImageUrl(post);
   const videoUrl = postVideoUrl(post);
-  const linkedText = linkifyText(bodyText);
-  // A meeting invite renders its own card, so the invite link in the body is not
-  // also turned into a link preview.
+
   const embeddedVideoUrl = post.meeting
     ? null
-    : extractEmbeddedVideoUrl(bodyText) ?? extractExternalUrl(bodyText);
+    : extractEmbeddedVideoUrl(rawBodyText) ?? extractExternalUrl(rawBodyText);
+
+  // If there's an embedded video or video attachment, clean raw URLs out of the body text
+  const hasVideoMedia = Boolean(embeddedVideoUrl || videoUrl);
+  const cleanedBodyText = hasVideoMedia ? stripUrls(rawBodyText) : rawBodyText;
+  const linkedText = linkifyText(cleanedBodyText);
 
   const submitComment = () => {
     if (!comment.trim()) return;
@@ -191,8 +196,8 @@ export function PostCard({ post }: { post: Post }) {
         </div>
       )}
 
-      {/* Text */}
-      {bodyText && (
+      {/* Cleaned Text (Only shows text, no raw video links) */}
+      {cleanedBodyText && (
         <div className="whitespace-pre-wrap px-4 pb-3 text-[15px] leading-relaxed text-ink-100">
           {linkedText.map((part, index) => part.href ? (
             <a
@@ -243,7 +248,7 @@ export function PostCard({ post }: { post: Post }) {
         </div>
       )}
 
-      {/* External video or rich link preview */}
+      {/* External video player */}
       {embeddedVideoUrl && (
         <div className="mx-4 mb-4 overflow-hidden rounded-xl border border-ink-600 bg-black shadow-lg shadow-black/20">
           <div className="aspect-video w-full">
