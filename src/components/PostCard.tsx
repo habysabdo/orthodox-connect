@@ -239,26 +239,20 @@ export function PostCard({ post }: { post: Post }) {
           {postText(post.originalPost) && <p className="whitespace-pre-wrap px-3 pb-3 text-sm leading-relaxed text-ink-200">{postText(post.originalPost)}</p>}
           {postImageUrl(post.originalPost) && <img src={postImageUrl(post.originalPost)} alt="" className="max-h-96 w-full object-cover" referrerPolicy="no-referrer" />}
           {postVideoUrl(post.originalPost) && (
-            <LazyFeedVideo
-              url={postVideoUrl(post.originalPost)}
-              className="aspect-video w-full bg-black object-contain"
-              posterClassName="aspect-video w-full"
-            />
+            <div className="w-full bg-black">
+              <LazyFeedVideo url={postVideoUrl(post.originalPost)} />
+            </div>
           )}
         </div>
       )}
 
       {/* External video player */}
       {embeddedVideoUrl && (
-        <div className="mx-4 mb-4 overflow-hidden rounded-xl border border-ink-600 bg-black shadow-lg shadow-black/20">
-          <div className="aspect-video w-full">
-            <LazyFeedVideo
-              url={embeddedVideoUrl}
-              title="External media shared in this post"
-              className="h-full w-full bg-black"
-              posterClassName="h-full w-full"
-            />
-          </div>
+        <div className="mx-4 mb-4 overflow-hidden rounded-xl border border-ink-600 bg-black shadow-lg">
+          <LazyFeedVideo
+            url={embeddedVideoUrl}
+            title="External media shared in this post"
+          />
         </div>
       )}
 
@@ -269,14 +263,12 @@ export function PostCard({ post }: { post: Post }) {
         </div>
       )}
 
-      {/* Video */}
+      {/* Direct Video */}
       {videoUrl && (
         <div className="border-y border-ink-700 bg-black">
           <LazyFeedVideo
             url={videoUrl}
             loop
-            className="aspect-video max-h-[620px] w-full bg-black object-contain"
-            posterClassName="aspect-video max-h-[620px] w-full"
           />
           <div className="flex items-center justify-between gap-3 border-t border-white/10 bg-ink-950/90 px-4 py-3">
             <div className="min-w-0">
