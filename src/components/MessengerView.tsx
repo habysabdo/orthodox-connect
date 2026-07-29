@@ -217,7 +217,7 @@ export function MessengerView() {
     };
   }, [activeThreadId, activeThreadMessageCount, markThreadRead]);
 
-  // Handle textarea height dynamically with fixed constraints
+  // Handle textarea height dynamically
   useEffect(() => {
     const textarea = messageInputRef.current;
     if (!textarea) return;
@@ -502,9 +502,9 @@ export function MessengerView() {
           </div>
 
           {/* Footer / Input area */}
-          <div className="border-t border-ink-700 bg-ink-850/95 p-3">
+          <div className="border-t border-ink-700 bg-ink-850/95 p-3 flex flex-col gap-2">
             {(pendingFiles.length > 0 || pendingVoice || recording) && (
-              <div className="mb-3 flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
                 {pendingFiles.map((item) => (
                   <div key={item.id} className="relative flex h-20 min-w-36 max-w-52 items-center gap-2 overflow-hidden rounded-xl border border-ink-600 bg-ink-800 p-2">
                     {item.previewUrl ? (
@@ -535,23 +535,10 @@ export function MessengerView() {
                 )}
               </div>
             )}
-            {composerError && <div className="mb-2 text-xs text-red-300">{composerError}</div>}
+            {composerError && <div className="text-xs text-red-300">{composerError}</div>}
             
-            {/* Horizontal Input Container */}
-            <div className="flex items-end gap-2 w-full">
-              <input ref={photoInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(event) => { addFiles(event.target.files, 'image'); event.target.value = ''; }} />
-              <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => { addFiles(event.target.files, 'file'); event.target.value = ''; }} />
-              
-              {/* Media Buttons */}
-              <div className="flex shrink-0 items-center gap-1 rounded-xl border border-ink-600 bg-ink-800/60 p-1 h-[42px]">
-                <button type="button" onClick={() => photoInputRef.current?.click()} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Add photos" aria-label="Add photos"><Image size={17} /></button>
-                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Attach files" aria-label="Attach files"><Paperclip size={17} /></button>
-                <button type="button" onClick={recording ? () => finishRecording(false) : startRecording} disabled={uploading} className={`rounded-lg p-2 hover:bg-ink-700 disabled:opacity-40 ${recording ? 'text-red-300' : 'text-ink-300 hover:text-gold-200'}`} title={recording ? 'Stop recording' : 'Record voice note'} aria-label={recording ? 'Stop recording' : 'Record voice note'}><Mic size={17} /></button>
-                <button type="button" onClick={startVideoCall} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Start a video call" aria-label="Start a video call"><Video size={17} /></button>
-                <button type="button" onClick={sendLike} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Send a like" aria-label="Send a like"><ThumbsUp size={17} /></button>
-              </div>
-
-              {/* Text Input Box */}
+            {/* 1. TOP ROW: Full-width Text Area */}
+            <div className="w-full">
               <textarea
                 ref={messageInputRef}
                 rows={1}
@@ -565,19 +552,34 @@ export function MessengerView() {
                 }}
                 placeholder={recording ? 'Recording voice note…' : 'Type a message…'}
                 disabled={recording || uploading}
-                className="flex-1 min-w-0 min-h-[42px] max-h-[120px] resize-none rounded-xl border border-ink-600 bg-ink-800/80 px-4 py-2 text-sm text-ink-100 placeholder-ink-400 outline-none focus:border-gold-400 focus:ring-1 focus:ring-gold-400 disabled:opacity-50"
+                className="w-full min-h-[42px] max-h-[120px] resize-none rounded-xl border border-ink-600 bg-ink-800/80 px-4 py-2.5 text-sm text-ink-100 placeholder-ink-400 outline-none focus:border-gold-400 focus:ring-1 focus:ring-gold-400 disabled:opacity-50"
               />
+            </div>
 
-              {/* Send Button */}
+            {/* 2. BOTTOM ROW: Media Icons on Left, Send Button on Right */}
+            <div className="flex items-center justify-between w-full">
+              <input ref={photoInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(event) => { addFiles(event.target.files, 'image'); event.target.value = ''; }} />
+              <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => { addFiles(event.target.files, 'file'); event.target.value = ''; }} />
+              
+              {/* Media Buttons (Left) */}
+              <div className="flex items-center gap-1 rounded-xl border border-ink-600 bg-ink-800/60 p-1">
+                <button type="button" onClick={() => photoInputRef.current?.click()} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Add photos" aria-label="Add photos"><Image size={17} /></button>
+                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Attach files" aria-label="Attach files"><Paperclip size={17} /></button>
+                <button type="button" onClick={recording ? () => finishRecording(false) : startRecording} disabled={uploading} className={`rounded-lg p-2 hover:bg-ink-700 disabled:opacity-40 ${recording ? 'text-red-300' : 'text-ink-300 hover:text-gold-200'}`} title={recording ? 'Stop recording' : 'Record voice note'} aria-label={recording ? 'Stop recording' : 'Record voice note'}><Mic size={17} /></button>
+                <button type="button" onClick={startVideoCall} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Start a video call" aria-label="Start a video call"><Video size={17} /></button>
+                <button type="button" onClick={sendLike} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Send a like" aria-label="Send a like"><ThumbsUp size={17} /></button>
+              </div>
+
+              {/* Send Button (Right) */}
               <button 
                 type="button"
                 onClick={() => void send()} 
                 disabled={uploading || recording || (!draft.trim() && pendingFiles.length === 0 && !pendingVoice)} 
-                className="gold-btn px-3.5 h-[42px] shrink-0 flex items-center justify-center gap-1.5 rounded-xl" 
+                className="gold-btn px-4 py-2 shrink-0 flex items-center justify-center gap-1.5 rounded-xl" 
                 aria-label="Send message"
               >
                 <Send size={16} />
-                <span className="hidden sm:inline">{uploading ? 'Uploading' : 'Send'}</span>
+                <span>{uploading ? 'Uploading' : 'Send'}</span>
               </button>
             </div>
           </div>
