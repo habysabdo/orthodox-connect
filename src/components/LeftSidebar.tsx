@@ -9,6 +9,7 @@ import {
   Sun,
   MessageCircle,
   Moon,
+  Scroll,
   UserCircle,
   Share2,
   Video,
@@ -49,6 +50,19 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
       ? [{ key: 'admin' as ViewKey, label: t('nav.admin'), icon: <Shield size={20} />, href: '/admin' }]
       : []),
   ];
+
+  // Dynamic Theme Label & Icon Helpers
+  const getThemeDetails = () => {
+    if (theme === 'light') {
+      return { label: 'Light Mode', icon: <Sun size={20} />, next: 'Dark Mode' };
+    }
+    if (theme === 'dark') {
+      return { label: 'Dark Mode', icon: <Moon size={20} />, next: 'Ancient View' };
+    }
+    return { label: 'Ancient View', icon: <Scroll size={20} />, next: 'Light Mode' };
+  };
+
+  const activeTheme = getThemeDetails();
 
   return (
     <aside className="flex h-full min-h-0 w-full flex-col gap-4 overflow-hidden p-4">
@@ -99,84 +113,84 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
 
         {/* Nav */}
         <nav className="flex flex-col gap-1">
-        {nav.map((item) => {
-          const active = view === item.key;
-          const className = `group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
-            active
-              ? 'bg-gold-400/10 text-gold-200 shadow-[inset_0_0_0_1px_rgba(212,175,55,0.3)]'
-              : 'text-ink-300 hover:bg-ink-800 hover:text-ink-100'
-          }`;
-          const content = (
-            <>
-              <span className={active ? 'text-gold-300' : 'text-ink-400 group-hover:text-gold-300'}>
-                {item.icon}
-              </span>
-              <span className="flex-1 text-left">{item.label}</span>
-              {item.badge ? (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gold-400 px-1.5 text-[11px] font-bold text-[#17130a]">
-                  {item.badge}
+          {nav.map((item) => {
+            const active = view === item.key;
+            const className = `group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
+              active
+                ? 'bg-gold-400/10 text-gold-200 shadow-[inset_0_0_0_1px_rgba(212,175,55,0.3)]'
+                : 'text-ink-300 hover:bg-ink-800 hover:text-ink-100'
+            }`;
+            const content = (
+              <>
+                <span className={active ? 'text-gold-300' : 'text-ink-400 group-hover:text-gold-300'}>
+                  {item.icon}
                 </span>
-              ) : null}
-              {active && <span className="h-1.5 w-1.5 rounded-full bg-gold-300" />}
-            </>
-          );
+                <span className="flex-1 text-left">{item.label}</span>
+                {item.badge ? (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gold-400 px-1.5 text-[11px] font-bold text-[#17130a]">
+                    {item.badge}
+                  </span>
+                ) : null}
+                {active && <span className="h-1.5 w-1.5 rounded-full bg-gold-300" />}
+              </>
+            );
 
-          if (item.href) {
+            if (item.href) {
+              return (
+                <a
+                  key={item.key}
+                  href={item.href}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setView(item.key);
+                    onClose?.();
+                  }}
+                  className={className}
+                >
+                  {content}
+                </a>
+              );
+            }
+
             return (
-              <a
+              <button
                 key={item.key}
-                href={item.href}
-                onClick={(event) => {
-                  event.preventDefault();
+                onClick={() => {
                   setView(item.key);
                   onClose?.();
                 }}
                 className={className}
               >
                 {content}
-              </a>
+              </button>
             );
-          }
+          })}
 
-          return (
-            <button
-              key={item.key}
-              onClick={() => {
-                setView(item.key);
-                onClose?.();
-              }}
-              className={className}
-            >
-              {content}
-            </button>
-          );
-        })}
+          {/* Invite / share */}
+          <button
+            onClick={openShare}
+            className="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-ink-300 transition-all hover:bg-ink-800 hover:text-ink-100"
+          >
+            <span className="text-ink-400 group-hover:text-gold-300">
+              <Share2 size={20} />
+            </span>
+            <span className="flex-1 text-left">{t('share.invite')}</span>
+          </button>
 
-        {/* Invite / share */}
-        <button
-          onClick={openShare}
-          className="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-ink-300 transition-all hover:bg-ink-800 hover:text-ink-100"
-        >
-          <span className="text-ink-400 group-hover:text-gold-300">
-            <Share2 size={20} />
-          </span>
-          <span className="flex-1 text-left">{t('share.invite')}</span>
-        </button>
+          <LanguageSwitcher variant="sidebar" />
 
-        <LanguageSwitcher variant="sidebar" />
-
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-ink-300 transition-all hover:bg-ink-800 hover:text-ink-100"
-          aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-        >
-          <span className="text-ink-400 group-hover:text-gold-300">
-            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-          </span>
-          <span className="flex-1 text-left">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
-        </button>
-
+          {/* 3-Way Dynamic Theme Toggle Button */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-ink-300 transition-all hover:bg-ink-800 hover:text-ink-100"
+            aria-label={`Switch to ${activeTheme.next}`}
+          >
+            <span className="text-ink-400 group-hover:text-gold-300">
+              {activeTheme.icon}
+            </span>
+            <span className="flex-1 text-left">{activeTheme.label}</span>
+          </button>
         </nav>
       </div>
 
