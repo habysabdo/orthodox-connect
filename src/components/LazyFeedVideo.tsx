@@ -21,7 +21,7 @@ export const LazyFeedVideo = memo(function LazyFeedVideo({
   posterClassName = '',
   loop = false,
   title,
-  rootMargin = '100px', // Increased margin so slight scrolling won't trigger disconnects
+  rootMargin = '200px',
 }: LazyFeedVideoProps) {
   const [active, setActive] = useState(false);
   const [autoPlay, setAutoPlay] = useState(false);
@@ -29,7 +29,6 @@ export const LazyFeedVideo = memo(function LazyFeedVideo({
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<VideoPlayerHandle | null>(null);
-  const userInteractedRef = useRef(false); // Track manual play
   const playerId = useId();
 
   const videoUrl = (url ?? '').trim();
@@ -40,11 +39,10 @@ export const LazyFeedVideo = memo(function LazyFeedVideo({
     setAutoPlay(false);
     setPreviewFailed(false);
     setPlaybackFailed(false);
-    userInteractedRef.current = false;
   }, [videoUrl]);
 
   useEffect(() => {
-    if (!videoUrl) return;
+    if (!videoUrl || active) return; // Stop observing once the video is active!
     const container = containerRef.current;
     if (!container) return;
 
@@ -57,14 +55,6 @@ export const LazyFeedVideo = memo(function LazyFeedVideo({
       ([entry]) => {
         if (entry.isIntersecting) {
           setActive(true);
-        } else if (!userInteractedRef.current) {
-          // Only unmount if the user HAS NOT manually started playing the video
-          playerRef.current?.reset();
-          setActive(false);
-          setAutoPlay(false);
-        } else {
-          // If user clicked play, just pause it when scrolled completely away, don't destroy the player
-          playerRef.current?.pause();
         }
       },
       { rootMargin, threshold: 0.01 },
@@ -72,7 +62,7 @@ export const LazyFeedVideo = memo(function LazyFeedVideo({
 
     observer.observe(container);
     return () => observer.disconnect();
-  }, [rootMargin, videoUrl]);
+  }, [rootMargin, videoUrl, active]);
 
   useEffect(() => {
     const pauseWhenAnotherVideoPlays = (event: Event) => {
@@ -83,14 +73,13 @@ export const LazyFeedVideo = memo(function LazyFeedVideo({
   }, [playerId]);
 
   const handlePlay = useCallback(() => {
-    userInteractedRef.current = true;
     window.dispatchEvent(new CustomEvent(FEED_VIDEO_PLAY_EVENT, { detail: playerId }));
   }, [playerId]);
 
   if (!videoUrl) return null;
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative min-h-[200px]">
       {playbackFailed ? (
         <div
           className={`relative flex flex-col items-center justify-center gap-3 overflow-hidden bg-black px-6 text-center text-white ${posterClassName || className}`}
@@ -107,7 +96,6 @@ export const LazyFeedVideo = memo(function LazyFeedVideo({
                 setPlaybackFailed(false);
                 setAutoPlay(true);
                 setActive(true);
-                userInteractedRef.current = true;
               }}
               className="mt-3 rounded-lg border border-white/25 bg-white/10 px-3 py-1.5 text-xs font-semibold transition hover:bg-white/20"
             >
@@ -130,7 +118,6 @@ export const LazyFeedVideo = memo(function LazyFeedVideo({
                     reset();
                     setAutoPlay(true);
                     setActive(true);
-                    userInteractedRef.current = true;
                   }}
                   className="mt-3 rounded-lg border border-white/25 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20"
                 >
@@ -156,7 +143,6 @@ export const LazyFeedVideo = memo(function LazyFeedVideo({
         <button
           type="button"
           onClick={() => {
-            userInteractedRef.current = true;
             setAutoPlay(true);
             setActive(true);
           }}
