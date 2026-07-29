@@ -217,13 +217,15 @@ export function MessengerView() {
     };
   }, [activeThreadId, activeThreadMessageCount, markThreadRead]);
 
-  // Handle textarea height dynamically without forcing high minHeight
+  // Handle textarea height dynamically with fixed constraints
   useEffect(() => {
     const textarea = messageInputRef.current;
     if (!textarea) return;
-    textarea.style.height = 'auto';
+    textarea.style.height = '42px';
     const maxHeight = 120;
-    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+    if (textarea.scrollHeight > 42) {
+      textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+    }
     textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
   }, [draft]);
 
@@ -536,12 +538,12 @@ export function MessengerView() {
             {composerError && <div className="mb-2 text-xs text-red-300">{composerError}</div>}
             
             {/* Horizontal Input Container */}
-            <div className="flex items-center gap-2 w-full">
+            <div className="flex items-end gap-2 w-full">
               <input ref={photoInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(event) => { addFiles(event.target.files, 'image'); event.target.value = ''; }} />
               <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => { addFiles(event.target.files, 'file'); event.target.value = ''; }} />
               
               {/* Media Buttons */}
-              <div className="flex shrink-0 items-center gap-1 rounded-xl border border-ink-600 bg-ink-800/60 p-1">
+              <div className="flex shrink-0 items-center gap-1 rounded-xl border border-ink-600 bg-ink-800/60 p-1 h-[42px]">
                 <button type="button" onClick={() => photoInputRef.current?.click()} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Add photos" aria-label="Add photos"><Image size={17} /></button>
                 <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Attach files" aria-label="Attach files"><Paperclip size={17} /></button>
                 <button type="button" onClick={recording ? () => finishRecording(false) : startRecording} disabled={uploading} className={`rounded-lg p-2 hover:bg-ink-700 disabled:opacity-40 ${recording ? 'text-red-300' : 'text-ink-300 hover:text-gold-200'}`} title={recording ? 'Stop recording' : 'Record voice note'} aria-label={recording ? 'Stop recording' : 'Record voice note'}><Mic size={17} /></button>
@@ -549,7 +551,7 @@ export function MessengerView() {
                 <button type="button" onClick={sendLike} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Send a like" aria-label="Send a like"><ThumbsUp size={17} /></button>
               </div>
 
-              {/* Text Input Box (Purposely omitting global 'input' class) */}
+              {/* Text Input Box */}
               <textarea
                 ref={messageInputRef}
                 rows={1}
@@ -563,8 +565,7 @@ export function MessengerView() {
                 }}
                 placeholder={recording ? 'Recording voice note…' : 'Type a message…'}
                 disabled={recording || uploading}
-                style={{ height: 'auto' }}
-                className="block w-full flex-1 min-w-0 resize-none rounded-xl border border-ink-600 bg-ink-800/80 px-4 py-2 text-sm text-ink-100 placeholder-ink-400 outline-none focus:border-gold-400 focus:ring-1 focus:ring-gold-400 disabled:opacity-50"
+                className="flex-1 min-w-0 min-h-[42px] max-h-[120px] resize-none rounded-xl border border-ink-600 bg-ink-800/80 px-4 py-2 text-sm text-ink-100 placeholder-ink-400 outline-none focus:border-gold-400 focus:ring-1 focus:ring-gold-400 disabled:opacity-50"
               />
 
               {/* Send Button */}
@@ -572,7 +573,7 @@ export function MessengerView() {
                 type="button"
                 onClick={() => void send()} 
                 disabled={uploading || recording || (!draft.trim() && pendingFiles.length === 0 && !pendingVoice)} 
-                className="gold-btn px-3.5 py-2 shrink-0 flex items-center gap-1.5" 
+                className="gold-btn px-3.5 h-[42px] shrink-0 flex items-center justify-center gap-1.5 rounded-xl" 
                 aria-label="Send message"
               >
                 <Send size={16} />
