@@ -537,8 +537,8 @@ export function MessengerView() {
             )}
             {composerError && <div className="text-xs text-red-300">{composerError}</div>}
             
-            {/* 1. TOP ROW: Full-width Text Area */}
-            <div className="w-full">
+           {/* 1. TOP ROW: Full-Width Text Input Box */}
+            <div style={{ width: '100%', display: 'block' }}>
               <textarea
                 ref={messageInputRef}
                 rows={1}
@@ -552,16 +552,25 @@ export function MessengerView() {
                 }}
                 placeholder={recording ? 'Recording voice note…' : 'Type a message…'}
                 disabled={recording || uploading}
-                className="w-full min-h-[42px] max-h-[120px] resize-none rounded-xl border border-ink-600 bg-ink-800/80 px-4 py-2.5 text-sm text-ink-100 placeholder-ink-400 outline-none focus:border-gold-400 focus:ring-1 focus:ring-gold-400 disabled:opacity-50"
+                style={{
+                  width: '100%',
+                  minHeight: '44px',
+                  maxHeight: '120px',
+                  resize: 'none',
+                  writingMode: 'horizontal-tb',
+                  display: 'block',
+                  boxSizing: 'border-box'
+                }}
+                className="rounded-xl border border-ink-600 bg-ink-800/80 px-4 py-2.5 text-sm text-ink-100 placeholder-ink-400 outline-none focus:border-gold-400 focus:ring-1 focus:ring-gold-400 disabled:opacity-50"
               />
             </div>
 
-            {/* 2. BOTTOM ROW: Media Icons on Left, Send Button on Right */}
-            <div className="flex items-center justify-between w-full">
+            {/* 2. BOTTOM ROW: Action Buttons & Send */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginTop: '8px' }}>
               <input ref={photoInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(event) => { addFiles(event.target.files, 'image'); event.target.value = ''; }} />
               <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => { addFiles(event.target.files, 'file'); event.target.value = ''; }} />
               
-              {/* Media Buttons (Left) */}
+              {/* Media Buttons */}
               <div className="flex items-center gap-1 rounded-xl border border-ink-600 bg-ink-800/60 p-1">
                 <button type="button" onClick={() => photoInputRef.current?.click()} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Add photos" aria-label="Add photos"><Image size={17} /></button>
                 <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Attach files" aria-label="Attach files"><Paperclip size={17} /></button>
@@ -570,7 +579,7 @@ export function MessengerView() {
                 <button type="button" onClick={sendLike} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Send a like" aria-label="Send a like"><ThumbsUp size={17} /></button>
               </div>
 
-              {/* Send Button (Right) */}
+              {/* Send Button */}
               <button 
                 type="button"
                 onClick={() => void send()} 
@@ -582,13 +591,3 @@ export function MessengerView() {
                 <span>{uploading ? 'Uploading' : 'Send'}</span>
               </button>
             </div>
-          </div>
-        </div>
-      ) : (
-        <div className="hidden flex-1 items-center justify-center p-8 md:flex">
-          <EmptyState icon={<MessageCircle size={26} />} title="Select a conversation" subtitle="Pick a friend on the left to view your message history." />
-        </div>
-      )}
-    </div>
-  );
-}
