@@ -1,0 +1,1 @@
+export const FALLBACK_VAPID_PUBLIC_KEY = 'BC-9pe9U7jnsyBkNmOi8hE6I2lgsksu_yzEnDCLjsNibmprOdhMCUJh8A95cD67Q34jh_wiisrCOoWzfgan04cM';

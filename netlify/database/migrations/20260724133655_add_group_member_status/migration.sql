@@ -1,0 +1,2 @@
+CREATE TYPE "group_member_status" AS ENUM('pending', 'approved');--> statement-breakpoint
+ALTER TABLE "group_members" ADD COLUMN "status" "group_member_status" DEFAULT 'approved'::"group_member_status" NOT NULL;
