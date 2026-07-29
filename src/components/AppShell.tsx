@@ -183,7 +183,7 @@ export function AppShell() {
       <div className={`mx-auto flex gap-0 px-0 ${view === 'reels' ? 'max-w-none' : 'max-w-[1500px] lg:px-4 lg:py-4'}`}>
         {/* Left sidebar */}
         <div className={`hidden w-64 shrink-0 lg:block ${view === 'reels' ? 'lg:!hidden' : ''}`}>
-          <div className="sticky top-[4.5rem] card !rounded-2xl">
+          <div className="sticky top-[4.5rem] h-[calc(100dvh-6rem)] card !rounded-2xl">
             <ErrorBoundary name="Navigation" variant="section" resetKeys={[currentUserId]}>
               <Suspense fallback={<FeedSkeleton />}>
                 <LeftSidebar />

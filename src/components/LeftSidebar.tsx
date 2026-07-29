@@ -51,7 +51,7 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
   ];
 
   return (
-    <aside className="flex h-full w-full flex-col gap-4 p-4">
+    <aside className="flex h-full min-h-0 w-full flex-col gap-4 overflow-hidden p-4">
       <div className="flex items-center justify-between px-2 pt-1">
         <Logo size={34} withText />
         {onClose && (
@@ -61,43 +61,44 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
         )}
       </div>
 
-      {/* Go Live CTA */}
-      <button
-        onClick={() => setGoLiveOpen(true)}
-        className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-gold-400/40 bg-gradient-to-br from-gold-500/15 to-transparent px-4 py-3 text-left transition-all hover:border-gold-400/70 hover:from-gold-500/25"
-      >
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-400/20 text-gold-200 group-hover:bg-gold-400/30">
-          <Radio size={20} />
-        </span>
-        <div className="flex-1">
-          <div className="text-sm font-bold text-gold-100">{t('header.goLive')}</div>
-          <div className="text-xs text-ink-400">{t('header.broadcast')}</div>
-        </div>
-        <span className="flex h-2.5 w-2.5">
-          <span className="absolute inline-flex h-2.5 w-2.5 animate-ping rounded-full bg-red-500/70" />
-          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
-        </span>
-      </button>
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pe-1">
+        {/* Go Live CTA */}
+        <button
+          onClick={() => setGoLiveOpen(true)}
+          className="group relative flex w-full items-center gap-3 overflow-hidden rounded-2xl border border-gold-400/40 bg-gradient-to-br from-gold-500/15 to-transparent px-4 py-3 text-left transition-all hover:border-gold-400/70 hover:from-gold-500/25"
+        >
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-400/20 text-gold-200 group-hover:bg-gold-400/30">
+            <Radio size={20} />
+          </span>
+          <div className="flex-1">
+            <div className="text-sm font-bold text-gold-100">{t('header.goLive')}</div>
+            <div className="text-xs text-ink-400">{t('header.broadcast')}</div>
+          </div>
+          <span className="flex h-2.5 w-2.5">
+            <span className="absolute inline-flex h-2.5 w-2.5 animate-ping rounded-full bg-red-500/70" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+          </span>
+        </button>
 
-      {/* Prayer meeting CTA */}
-      <button
-        onClick={() => {
-          onClose?.();
-          setPrayerMeetingOpen(true);
-        }}
-        className="group flex items-center gap-3 rounded-2xl border border-ink-700 bg-ink-850/60 px-4 py-3 text-left transition-all hover:border-gold-400/50 hover:bg-ink-800"
-      >
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-ink-800 text-gold-200 group-hover:bg-gold-400/20">
-          <Video size={20} />
-        </span>
-        <div className="flex-1">
-          <div className="text-sm font-bold text-ink-100">Start Prayer Meeting</div>
-          <div className="text-xs text-ink-400">Pray together over video</div>
-        </div>
-      </button>
+        {/* Prayer meeting CTA */}
+        <button
+          onClick={() => {
+            onClose?.();
+            setPrayerMeetingOpen(true);
+          }}
+          className="group flex w-full items-center gap-3 rounded-2xl border border-ink-700 bg-ink-850/60 px-4 py-3 text-left transition-all hover:border-gold-400/50 hover:bg-ink-800"
+        >
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-ink-800 text-gold-200 group-hover:bg-gold-400/20">
+            <Video size={20} />
+          </span>
+          <div className="flex-1">
+            <div className="text-sm font-bold text-ink-100">Start Prayer Meeting</div>
+            <div className="text-xs text-ink-400">Pray together over video</div>
+          </div>
+        </button>
 
-      {/* Nav */}
-      <nav className="flex flex-col gap-1">
+        {/* Nav */}
+        <nav className="flex flex-col gap-1">
         {nav.map((item) => {
           const active = view === item.key;
           const className = `group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
@@ -176,30 +177,31 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
           <span className="flex-1 text-left">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
         </button>
 
-      </nav>
+        </nav>
+      </div>
 
-      <div className="flex-1" />
+      <div className="shrink-0 space-y-2">
+        {/* Me card */}
+        <button
+          onClick={() => setView('profile')}
+          className="flex w-full items-center gap-3 rounded-2xl border border-ink-700 bg-ink-850/60 p-3 text-left transition-colors hover:border-gold-400/40"
+        >
+          <Avatar src={me.photo} name={me.name} size={40} online ring="gold" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold text-ink-100">{userName(me)}</div>
+            <div className="truncate text-xs text-ink-400">{me.parish || t('profile.noParish')}</div>
+          </div>
+          {hasAdminAccess(me) && <span className="gold-chip">{t('common.admin')}</span>}
+        </button>
 
-      {/* Me card */}
-      <button
-        onClick={() => setView('profile')}
-        className="flex items-center gap-3 rounded-2xl border border-ink-700 bg-ink-850/60 p-3 text-left transition-colors hover:border-gold-400/40"
-      >
-        <Avatar src={me.photo} name={me.name} size={40} online ring="gold" />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold text-ink-100">{userName(me)}</div>
-          <div className="truncate text-xs text-ink-400">{me.parish || t('profile.noParish')}</div>
-        </div>
-        {hasAdminAccess(me) && <span className="gold-chip">{t('common.admin')}</span>}
-      </button>
-
-      <button
-        onClick={signOut}
-        className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-ink-400 transition-colors hover:bg-ink-800 hover:text-red-300"
-      >
-        <LogOut size={16} />
-        {t('common.signOut')}
-      </button>
+        <button
+          onClick={signOut}
+          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-ink-400 transition-colors hover:bg-ink-800 hover:text-red-300"
+        >
+          <LogOut size={16} />
+          {t('common.signOut')}
+        </button>
+      </div>
     </aside>
   );
 }
