@@ -1,5 +1,6 @@
 import { apiUrl } from '../lib/config';
 import { FALLBACK_VAPID_PUBLIC_KEY } from '../config/push';
+import { urlBase64ToUint8Array } from './push';
 
 const DEVICE_ID_KEY = 'oc.pushDeviceId';
 const clientEnv = import.meta.env as Record<string, string | undefined>;
@@ -43,13 +44,6 @@ function getDeviceId(): string {
   }
 }
 
-function urlBase64ToUint8Array(value: string): Uint8Array {
-  const padding = '='.repeat((4 - (value.length % 4)) % 4);
-  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = window.atob(base64);
-  return Uint8Array.from(raw, (character) => character.charCodeAt(0));
-}
-
 async function currentSubscription(): Promise<PushSubscription | null> {
   if (!supportsPush()) return null;
   try {
@@ -87,6 +81,19 @@ export async function getPushStatus(): Promise<PushStatus> {
   }
 }
 
+export async function savePushSubscription(subscription: PushSubscription): Promise<void> {
+  const serialized = subscription.toJSON();
+  const response = await fetch(apiUrl('/api/push-subscriptions'), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      deviceId: getDeviceId(),
+      ...serialized,
+    }),
+  });
+  if (!response.ok) throw new Error('Unable to save this device for push notifications.');
+}
+
 export async function enablePushNotifications(): Promise<PushStatus> {
   if (isIosDevice() && !isStandaloneApp()) return 'unavailable';
   if (!supportsPush()) return 'unsupported';
@@ -112,16 +119,7 @@ export async function enablePushNotifications(): Promise<PushStatus> {
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(publicKey),
     });
-    const serialized = subscription.toJSON();
-    const response = await fetch(apiUrl('/api/push-subscriptions'), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        deviceId: getDeviceId(),
-        ...serialized,
-      }),
-    });
-    if (!response.ok) throw new Error('Unable to save this device for push notifications.');
+    await savePushSubscription(subscription);
     return 'enabled';
   } catch (error) {
     console.warn('Push notifications could not be enabled.', error);
