@@ -13,7 +13,6 @@ export interface VideoPlayerHandle {
 }
 
 interface VideoPlayerProps {
-  /** a post's `video` field, which may be absent on a partially saved post */
   url?: string | null;
   className?: string;
   controls?: boolean;
@@ -64,12 +63,6 @@ declare global {
 
 let youTubeApiPromise: Promise<void> | null = null;
 
-/**
- * `new URL()` throws on anything it cannot parse, and an embed URL is derived from
- * whatever string a post carries — including one a member typed by hand. Returning
- * null instead lets the player fall back to the link card rather than taking the
- * whole feed down with it.
- */
 function buildEmbedUrl(raw: string | undefined | null): URL | null {
   const value = (raw ?? '').trim();
   if (!value) return null;
@@ -141,46 +134,48 @@ function LinkPreviewCard({
   const label = fallbackLabel(provider);
 
   return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noreferrer noopener"
-      className={`group relative flex min-h-52 flex-col justify-end overflow-hidden bg-ink-950 text-left ${className}`}
-      aria-label={label}
-    >
-      {preview?.image ? (
-        <img
-          src={preview.image}
-          alt=""
-          referrerPolicy="no-referrer"
-          className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-        />
-      ) : (
-        <div className="absolute inset-0 grid place-items-center bg-[radial-gradient(circle_at_top_left,rgba(212,175,55,0.24),transparent_48%),linear-gradient(135deg,#1b2430,#090d12)]">
-          <Film size={46} className="text-gold-300/70" aria-hidden="true" />
+    <div className={`relative w-full aspect-video overflow-hidden bg-ink-950 ${className}`}>
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="group absolute inset-0 flex flex-col justify-end overflow-hidden text-left"
+        aria-label={label}
+      >
+        {preview?.image ? (
+          <img
+            src={preview.image}
+            alt=""
+            referrerPolicy="no-referrer"
+            className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+          />
+        ) : (
+          <div className="absolute inset-0 grid place-items-center bg-[radial-gradient(circle_at_top_left,rgba(212,175,55,0.24),transparent_48%),linear-gradient(135deg,#1b2430,#090d12)]">
+            <Film size={46} className="text-gold-300/70" aria-hidden="true" />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-black/10" />
+        <div className="relative z-10 p-4 sm:p-5">
+          <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-gold-300">
+            <Play size={12} fill="currentColor" aria-hidden="true" />
+            {preview?.siteName || hostname || 'External video'}
+          </div>
+          <h3 className="line-clamp-2 text-base font-semibold text-white sm:text-lg">
+            {preview?.title || 'This video is available on the original site'}
+          </h3>
+          {preview?.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-white/70">{preview.description}</p>}
+          <span className="mt-3 inline-flex items-center gap-2 rounded-lg bg-gold-400 px-3 py-1.5 text-xs font-bold text-ink-950 transition group-hover:bg-gold-300">
+            {label} <ExternalLink size={14} aria-hidden="true" />
+          </span>
         </div>
-      )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-black/10" />
-      <div className="relative z-10 p-4 sm:p-5">
-        <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-gold-300">
-          <Play size={12} fill="currentColor" aria-hidden="true" />
-          {preview?.siteName || hostname || 'External video'}
-        </div>
-        <h3 className="line-clamp-2 text-base font-semibold text-white sm:text-lg">
-          {preview?.title || 'This video is available on the original site'}
-        </h3>
-        {preview?.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-white/70">{preview.description}</p>}
-        <span className="mt-4 inline-flex items-center gap-2 rounded-lg bg-gold-400 px-3.5 py-2 text-xs font-bold text-ink-950 transition group-hover:bg-gold-300">
-          {label} <ExternalLink size={14} aria-hidden="true" />
-        </span>
-      </div>
-    </a>
+      </a>
+    </div>
   );
 }
 
 function VideoUnavailable({ className }: { className: string }) {
   return (
-    <div className={`relative grid min-h-52 place-items-center overflow-hidden bg-black px-6 text-center ${className}`} role="alert">
+    <div className={`relative w-full aspect-video grid place-items-center overflow-hidden bg-black px-6 text-center ${className}`} role="alert">
       <div>
         <AlertCircle size={30} className="mx-auto text-red-300" aria-hidden="true" />
         <p className="mt-3 text-sm font-semibold text-white">Video playback unavailable</p>
@@ -310,7 +305,7 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
 
   if (loading) {
     return (
-      <div className={`grid min-h-52 place-items-center overflow-hidden bg-ink-950 ${className}`} aria-label="Loading video preview">
+      <div className={`relative w-full aspect-video grid place-items-center overflow-hidden bg-ink-950 ${className}`} aria-label="Loading video preview">
         <div className="flex items-center gap-2 text-xs font-medium text-ink-400">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-ink-600 border-t-gold-300" />
           Loading video preview
@@ -336,20 +331,22 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
   }
 
   return (
-    <iframe
-      ref={iframeRef}
-      src={embedUrl.toString()}
-      title={title}
-      loading="lazy"
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-      allowFullScreen
-      referrerPolicy="strict-origin-when-cross-origin"
-      onError={() => {
-        setFailed(true);
-        onError?.();
-      }}
-      className={className}
-    />
+    <div className={`relative w-full aspect-video overflow-hidden bg-black ${className}`}>
+      <iframe
+        ref={iframeRef}
+        src={embedUrl.toString()}
+        title={title}
+        loading="lazy"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowFullScreen
+        referrerPolicy="strict-origin-when-cross-origin"
+        onError={() => {
+          setFailed(true);
+          onError?.();
+        }}
+        className="absolute inset-0 h-full w-full border-0"
+      />
+    </div>
   );
 });
 
@@ -376,8 +373,6 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
   const src = ((source.kind === 'direct' ? source.url : url) ?? '').split('#')[0].trim();
   const hlsUrl = source.kind === 'direct' ? bunnyHlsUrl(src) : null;
 
-  // Bunny HLS is preferred for adaptive playback. If the manifest is not ready
-  // yet, the hosted player remains a resilient fallback while encoding finishes.
   const [failedDirectSrc, setFailedDirectSrc] = useState<string | null>(null);
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const hostedFallbackUrl = failedDirectSrc === src ? bunnyHostedPlayerUrl(src) : null;
@@ -475,7 +470,6 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
         try {
           player.currentTime = 0;
         } catch {
-          // Some hosted media elements reject seeking until metadata is ready.
         }
         return;
       }
@@ -513,21 +507,23 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
 
   if (source.kind === 'mux') {
     return (
-      <MuxPlayer
-        ref={muxPlayerRef}
-        playbackId={source.playbackId}
-        streamType="on-demand"
-        playsInline
-        autoPlay={false}
-        preload="none"
-        loop={loop}
-        muted={muted}
-        onPlay={onPlay}
-        onError={reportFinalError}
-        onVolumeChange={() => onMutedChange?.(muxPlayerRef.current?.muted ?? muted)}
-        style={{ '--controls': controls ? undefined : 'none' }}
-        className={className}
-      />
+      <div className={`relative w-full aspect-video overflow-hidden bg-black ${className}`}>
+        <MuxPlayer
+          ref={muxPlayerRef}
+          playbackId={source.playbackId}
+          streamType="on-demand"
+          playsInline
+          autoPlay={false}
+          preload="none"
+          loop={loop}
+          muted={muted}
+          onPlay={onPlay}
+          onError={reportFinalError}
+          onVolumeChange={() => onMutedChange?.(muxPlayerRef.current?.muted ?? muted)}
+          style={{ '--controls': controls ? undefined : 'none' }}
+          className="h-full w-full object-contain"
+        />
+      </div>
     );
   }
 
@@ -542,54 +538,55 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
       parsedUrl.searchParams.set('preload', 'false');
       playerUrl = parsedUrl.toString();
     } catch {
-      // The source parser already validates hosted URLs; keep its safe fallback.
     }
     return (
-      <iframe
-        ref={hostedIframeRef}
-        src={playerUrl}
-        title={title}
-        loading="lazy"
-        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
-        allowFullScreen
-        referrerPolicy="strict-origin-when-cross-origin"
-        onError={reportFinalError}
-        style={{ border: 0, width: '100%', height: '100%', aspectRatio: '16 / 9' }}
-        className={className}
-      />
+      <div className={`relative w-full aspect-video overflow-hidden bg-black ${className}`}>
+        <iframe
+          ref={hostedIframeRef}
+          src={playerUrl}
+          title={title}
+          loading="lazy"
+          allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
+          allowFullScreen
+          referrerPolicy="strict-origin-when-cross-origin"
+          onError={reportFinalError}
+          className="absolute inset-0 h-full w-full border-0"
+        />
+      </div>
     );
   }
 
-  if (!src) return <div className={className} aria-hidden="true" />;
+  if (!src) return <div className={`relative w-full aspect-video ${className}`} aria-hidden="true" />;
   const poster = bunnyPosterUrl(src) ?? undefined;
 
   return (
-    <video
-      ref={nativeVideoRef}
-      src={hlsUrl ? undefined : `${src}#t=0.1`}
-      poster={poster}
-      controls={controls}
-      autoPlay={autoPlay}
-      loop={loop}
-      muted={muted}
-      playsInline
-      {...({ 'webkit-playsinline': 'true' } as Record<string, string>)}
-      preload="none"
-      style={{ width: '100%', objectFit: 'contain', aspectRatio: '16 / 9' }}
-      onPlay={onPlay}
-      onCanPlay={(event) => {
-        if (!autoPlay || !event.currentTarget.paused) return;
-        void event.currentTarget.play().catch(() => undefined);
-      }}
-      onVolumeChange={(event) => onMutedChange?.(event.currentTarget.muted)}
-      onError={(event) => {
-        const mediaError = event.currentTarget.error;
-        console.error('Video playback failed', { url: src, code: mediaError?.code, message: mediaError?.message });
-        if (bunnyHostedPlayerUrl(src)) setFailedDirectSrc(src);
-        else reportFinalError();
-      }}
-      className={className}
-    />
+    <div className={`relative w-full aspect-video overflow-hidden bg-black ${className}`}>
+      <video
+        ref={nativeVideoRef}
+        src={hlsUrl ? undefined : `${src}#t=0.1`}
+        poster={poster}
+        controls={controls}
+        autoPlay={autoPlay}
+        loop={loop}
+        muted={muted}
+        playsInline
+        {...({ 'webkit-playsinline': 'true' } as Record<string, string>)}
+        preload="none"
+        className="absolute inset-0 h-full w-full object-contain"
+        onPlay={onPlay}
+        onCanPlay={(event) => {
+          if (!autoPlay || !event.currentTarget.paused) return;
+          void event.currentTarget.play().catch(() => undefined);
+        }}
+        onVolumeChange={(event) => onMutedChange?.(event.currentTarget.muted)}
+        onError={(event) => {
+          const mediaError = event.currentTarget.error;
+          console.error('Video playback failed', { url: src, code: mediaError?.code, message: mediaError?.message });
+          if (bunnyHostedPlayerUrl(src)) setFailedDirectSrc(src);
+          else reportFinalError();
+        }}
+      />
+    </div>
   );
 });
 
