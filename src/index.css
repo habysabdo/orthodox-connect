@@ -1,26 +1,86 @@
-/* --------------------------------------------------
-   3D ANCIENT PARCHMENT & ILLUMINATED MANUSCRIPT THEME
--------------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --ink-50: 20 28 40;
+  --ink-100: 27 37 51;
+  --ink-200: 48 61 78;
+  --ink-300: 71 85 105;
+  --ink-400: 100 116 139;
+  --ink-500: 148 160 178;
+  --ink-600: 196 203 214;
+  --ink-700: 218 222 229;
+  --ink-750: 230 232 236;
+  --ink-800: 239 240 242;
+  --ink-850: 247 247 246;
+  --ink-900: 252 251 248;
+  --ink-950: 247 243 235;
+  --gold-50: 251 246 227;
+  --gold-100: 247 236 195;
+  --gold-200: 240 217 138;
+  --gold-300: 232 199 90;
+  --gold-400: 212 175 55;
+  --gold-500: 184 147 42;
+  --gold-600: 153 121 31;
+  --gold-700: 115 92 26;
+  --gold-800: 77 61 18;
+  --gold-900: 42 34 10;
+  --shadow-gold: 0 0 0 1px rgba(184, 147, 42, 0.35), 0 8px 26px rgba(115, 92, 26, 0.16);
+  --shadow-glow: 0 0 24px rgba(184, 147, 42, 0.22);
+  --shadow-card: 0 18px 45px -28px rgba(44, 34, 18, 0.32), 0 2px 8px rgba(44, 34, 18, 0.06);
+}
+
+.dark {
+  color-scheme: dark;
+  --ink-50: 244 245 247;
+  --ink-100: 231 233 238;
+  --ink-200: 200 204 214;
+  --ink-300: 122 132 148;
+  --ink-400: 81 91 107;
+  --ink-500: 58 65 79;
+  --ink-600: 43 50 63;
+  --ink-700: 34 40 52;
+  --ink-750: 29 34 44;
+  --ink-800: 24 28 37;
+  --ink-850: 19 23 31;
+  --ink-900: 15 18 24;
+  --ink-950: 10 12 18;
+  --gold-50: 251 246 227;
+  --gold-100: 247 236 195;
+  --gold-200: 240 217 138;
+  --gold-300: 232 199 90;
+  --gold-400: 212 175 55;
+  --gold-500: 184 147 42;
+  --gold-600: 153 121 31;
+  --gold-700: 115 92 26;
+  --gold-800: 77 61 18;
+  --gold-900: 42 34 10;
+  --shadow-gold: 0 0 0 1px rgba(212, 175, 55, 0.4), 0 8px 30px rgba(212, 175, 55, 0.18);
+  --shadow-glow: 0 0 24px rgba(212, 175, 55, 0.35);
+  --shadow-card: 0 10px 40px -12px rgba(0, 0, 0, 0.6);
+}
+
 html.ancient,
 .ancient {
   color-scheme: light;
-  
-  /* Manuscript Dark Ink & Earthy Tones */
-  --ink-50: 38 24 14;       /* Deepest ink for headers */
-  --ink-100: 54 36 22;      /* Main text ink */
-  --ink-200: 82 58 38;      /* Muted text */
+  --ink-50: 38 24 14;
+  --ink-100: 54 36 22;
+  --ink-200: 82 58 38;
   --ink-300: 110 82 56;
   --ink-400: 138 106 74;
   --ink-500: 163 130 94;
-  --ink-600: 184 148 108;   /* Scroll borders */
+  --ink-600: 184 148 108;
   --ink-700: 204 170 128;
   --ink-750: 220 188 148;
-  --ink-800: 232 204 166;   /* Card highlight */
-  --ink-850: 242 224 190;   /* Parchment card body */
-  --ink-900: 228 206 168;   /* Sidebar surface */
-  --ink-950: 30 20 12;      /* Dark ambient stone backdrop */
+  --ink-800: 232 204 166;
+  --ink-850: 242 224 190;
+  --ink-900: 228 206 168;
+  --ink-950: 30 20 12;
 
-  /* Ancient Gold Accent Variables */
   --gold-50: 255 248 230;
   --gold-100: 247 230 185;
   --gold-200: 230 195 120;
@@ -36,67 +96,87 @@ html.ancient,
   --shadow-card: inset 0 0 25px rgba(100, 65, 25, 0.22), 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
-/* 1. Deep Stone Wall / Ambient Table Background */
 html.ancient body {
   font-family: 'Cinzel', 'Georgia', serif !important;
   background-color: #1e140c !important;
-  background-image: 
-    radial-gradient(rgba(212, 175, 55, 0.08) 1px, transparent 1px),
-    radial-gradient(rgba(0, 0, 0, 0.5) 1px, #170e08 1px) !important;
-  background-size: 32px 32px !important;
   color: #362416 !important;
 }
 
-/* 2. Left Sidebar - Rolled Scroll Cylindrical Gradient */
-html.ancient aside,
-html.ancient [class*="w-64"] {
-  background: linear-gradient(90deg, #b89565 0%, #eadabe 7%, #f5e9d3 50%, #eadabe 93%, #b89565 100%) !important;
-  border-right: 4px solid #7a5830 !important;
-  border-left: 2px solid #5c4121 !important;
-  box-shadow: 10px 0 25px rgba(0, 0, 0, 0.65), inset 0 0 15px rgba(90, 55, 20, 0.35) !important;
-  border-radius: 6px !important;
-}
-
-/* 3. Main Feed Cards - Parchment Vignette Effect */
 html.ancient .card,
 html.ancient [class*="bg-ink-850"],
 html.ancient [class*="bg-ink-900"] {
   background-color: #f3e5c8 !important;
-  background-image: radial-gradient(circle at center, #fbf4e6 0%, #ebd7b2 75%, #d8be91 100%) !important;
-  border: 3px double #9e7a47 !important;
-  border-radius: 6px !important;
-  box-shadow: 
-    inset 0 0 28px rgba(110, 70, 25, 0.22), 
-    0 8px 22px rgba(0, 0, 0, 0.5) !important;
+  border: 2px double #9e7a47 !important;
   color: #362416 !important;
 }
 
-/* 4. Text & Headers - Manuscript Ink Styling */
-html.ancient h1, 
-html.ancient h2, 
-html.ancient h3, 
-html.ancient h4, 
-html.ancient p, 
-html.ancient span,
-html.ancient [class*="text-ink-"] {
-  color: #362416 !important;
+html.ancient aside {
+  background-color: #eadabe !important;
+  border-right: 3px double #7a5830 !important;
 }
 
-/* 5. Gold Buttons - Metallic Wax Finish */
-html.ancient .gold-btn,
-html.ancient button[class*="bg-gold"] {
-  background: linear-gradient(180deg, #d4a359 0%, #9e6f28 100%) !important;
-  border: 1px solid #634313 !important;
-  color: #fff9eb !important;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+html,
+body,
+#root {
+  height: 100%;
 }
 
-/* 6. Notifications & Live Badges - Crimson Wax Seals */
-html.ancient [class*="bg-red-"],
-html.ancient [class*="bg-amber-"] {
-  background: radial-gradient(circle at 35% 35%, #b91c1c 0%, #7f1d1d 100%) !important;
-  color: #fef3c7 !important;
-  border: 1px solid #450a0a !important;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5) !important;
+body {
+  margin: 0;
+  background-color: rgb(var(--ink-950));
+  color: rgb(var(--ink-100));
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html.theme-transition,
+html.theme-transition * {
+  transition-property: color, background-color, border-color, outline-color, fill, stroke, box-shadow;
+  transition-duration: 280ms;
+  transition-timing-function: ease;
+}
+
+@layer components {
+  .gold-text {
+    @apply bg-gradient-to-r from-gold-200 via-gold-400 to-gold-300 bg-clip-text text-transparent;
+  }
+  .gold-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-gold-300 to-gold-500 px-4 py-2.5 font-semibold text-[#17130a] shadow-gold transition-all duration-200 hover:from-gold-200 hover:to-gold-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .ghost-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-ink-600 bg-ink-800/60 px-4 py-2.5 font-semibold text-ink-300 transition-all duration-200 hover:border-gold-400/60 hover:bg-ink-750 hover:text-gold-200 active:scale-[0.98];
+  }
+  .card {
+    @apply rounded-2xl border border-ink-700 bg-ink-850/80 backdrop-blur-sm shadow-card;
+  }
+  .input {
+    @apply w-full rounded-xl border border-ink-600 bg-ink-900/70 px-4 py-2.5 text-sm text-ink-100 placeholder-ink-400 outline-none transition-colors focus:border-gold-400/70 focus:ring-2 focus:ring-gold-400/20;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-ink-600 bg-ink-800 px-2.5 py-1 text-xs font-medium text-ink-300;
+  }
+  .gold-chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-gold-400/40 bg-gold-400/10 px-2.5 py-1 text-xs font-semibold text-gold-200;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .gold-ring {
+    box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.55), 0 0 0 4px rgb(var(--ink-850) / 0.9);
+  }
 }
