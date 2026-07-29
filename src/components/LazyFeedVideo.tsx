@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { AlertCircle, Play } from 'lucide-react';
 import { VideoPlayer, type VideoPlayerHandle } from './VideoPlayer';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -7,33 +7,21 @@ import { bunnyPosterUrl, bunnyPreviewUrl } from '@/utils/bunny';
 const FEED_VIDEO_PLAY_EVENT = 'orthodox-connect:feed-video-play';
 
 interface LazyFeedVideoProps {
-  /** a post's `video` field; an absent or empty value renders nothing */
   url?: string | null;
   className?: string;
   posterClassName?: string;
   loop?: boolean;
   title?: string;
-  /** how far outside the viewport the player is allowed to mount */
   rootMargin?: string;
 }
 
-/**
- * A feed video that costs a thumbnail until it is worth more.
- *
- * Every video post used to mount a player — an iframe, a Mux element, or a
- * <video> fetching metadata — the moment the post rendered, so scrolling past
- * ten posts opened ten players and their network connections. Here the post
- * shows Bunny's preview image instead, and the real player is only created once
- * the video is scrolled into view or the member presses Play. Pressing Play also
- * starts playback, so the poster behaves like the player it replaces.
- */
-export function LazyFeedVideo({
+export const LazyFeedVideo = memo(function LazyFeedVideo({
   url,
   className = '',
   posterClassName = '',
   loop = false,
   title,
-  rootMargin = '0px',
+  rootMargin = '100px', // Increased margin so slight scrolling won't trigger disconnects
 }: LazyFeedVideoProps) {
   const [active, setActive] = useState(false);
   const [autoPlay, setAutoPlay] = useState(false);
@@ -41,11 +29,9 @@ export function LazyFeedVideo({
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<VideoPlayerHandle | null>(null);
+  const userInteractedRef = useRef(false); // Track manual play
   const playerId = useId();
 
-  // A post can carry `videoStatus: 'ready'` with no URL — an upload that failed
-  // between reserving the post and storing the file. There is nothing to play, so
-  // render nothing rather than a broken poster and a player pointed at ''.
   const videoUrl = (url ?? '').trim();
   const preview = previewFailed ? bunnyPosterUrl(videoUrl) : bunnyPreviewUrl(videoUrl);
 
@@ -54,14 +40,14 @@ export function LazyFeedVideo({
     setAutoPlay(false);
     setPreviewFailed(false);
     setPlaybackFailed(false);
+    userInteractedRef.current = false;
   }, [videoUrl]);
 
   useEffect(() => {
     if (!videoUrl) return;
     const container = containerRef.current;
     if (!container) return;
-    // Without IntersectionObserver (very old browsers) there is no signal to
-    // wait for, so mount the player as before.
+
     if (typeof IntersectionObserver === 'undefined') {
       setActive(true);
       return;
@@ -71,15 +57,19 @@ export function LazyFeedVideo({
       ([entry]) => {
         if (entry.isIntersecting) {
           setActive(true);
-          return;
+        } else if (!userInteractedRef.current) {
+          // Only unmount if the user HAS NOT manually started playing the video
+          playerRef.current?.reset();
+          setActive(false);
+          setAutoPlay(false);
+        } else {
+          // If user clicked play, just pause it when scrolled completely away, don't destroy the player
+          playerRef.current?.pause();
         }
-
-        playerRef.current?.reset();
-        setActive(false);
-        setAutoPlay(false);
       },
       { rootMargin, threshold: 0.01 },
     );
+
     observer.observe(container);
     return () => observer.disconnect();
   }, [rootMargin, videoUrl]);
@@ -93,6 +83,7 @@ export function LazyFeedVideo({
   }, [playerId]);
 
   const handlePlay = useCallback(() => {
+    userInteractedRef.current = true;
     window.dispatchEvent(new CustomEvent(FEED_VIDEO_PLAY_EVENT, { detail: playerId }));
   }, [playerId]);
 
@@ -116,6 +107,7 @@ export function LazyFeedVideo({
                 setPlaybackFailed(false);
                 setAutoPlay(true);
                 setActive(true);
+                userInteractedRef.current = true;
               }}
               className="mt-3 rounded-lg border border-white/25 bg-white/10 px-3 py-1.5 text-xs font-semibold transition hover:bg-white/20"
             >
@@ -138,6 +130,7 @@ export function LazyFeedVideo({
                     reset();
                     setAutoPlay(true);
                     setActive(true);
+                    userInteractedRef.current = true;
                   }}
                   className="mt-3 rounded-lg border border-white/25 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20"
                 >
@@ -163,6 +156,7 @@ export function LazyFeedVideo({
         <button
           type="button"
           onClick={() => {
+            userInteractedRef.current = true;
             setAutoPlay(true);
             setActive(true);
           }}
@@ -190,4 +184,4 @@ export function LazyFeedVideo({
       )}
     </div>
   );
-}
+});
