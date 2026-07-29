@@ -217,12 +217,13 @@ export function MessengerView() {
     };
   }, [activeThreadId, activeThreadMessageCount, markThreadRead]);
 
+  // Handle textarea height dynamically
   useEffect(() => {
     const textarea = messageInputRef.current;
     if (!textarea) return;
     textarea.style.height = 'auto';
-    const maxHeight = 144;
-    textarea.style.height = `${Math.max(72, Math.min(textarea.scrollHeight, maxHeight))}px`;
+    const maxHeight = 120;
+    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
     textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
   }, [draft]);
 
@@ -378,11 +379,6 @@ export function MessengerView() {
     state.sendMessage(activeThread.id, '👍');
   };
 
-  /**
-   * Start a video call for this conversation: the invite card is posted into the
-   * thread, and the caller is dropped straight into the room so the other member
-   * finds someone waiting when they tap Join.
-   */
   const startVideoCall = () => {
     if (!activeThread || uploading || recording) return;
     const roomId = createMeetingId();
@@ -398,6 +394,7 @@ export function MessengerView() {
 
   return (
     <div className="card flex h-[calc(100vh-7rem)] overflow-hidden">
+      {/* Sidebar / Left panel */}
       <div className={`flex w-full flex-col border-r border-ink-700 md:w-80 ${activeThread ? 'hidden md:flex' : 'flex'}`}>
         <div className="border-b border-ink-700 p-4">
           <h1 className="flex items-center gap-2 font-serif text-xl font-semibold">
@@ -434,8 +431,10 @@ export function MessengerView() {
         </div>
       </div>
 
+      {/* Chat Area / Right panel */}
       {activeThread && activeFriend ? (
         <div className="flex min-w-0 flex-1 flex-col">
+          {/* Header */}
           <div className="flex items-center gap-3 border-b border-ink-700 p-3">
             <button onClick={() => setOpenThreadId(null)} className="ghost-btn p-2 md:hidden" aria-label="Back to conversations">
               <MessageCircle size={16} />
@@ -450,12 +449,13 @@ export function MessengerView() {
             </div>
           </div>
 
+          {/* Messages list */}
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto scrollbar-thin p-4">
-            <div className="mx-auto w-fit rounded-full bg-ink-800 px-3 py-1 text-[10px] text-ink-400">{activeFriend.parish ?? ''}</div>
+            {activeFriend.parish && (
+              <div className="mx-auto w-fit rounded-full bg-ink-800 px-3 py-1 text-[10px] text-ink-400">{activeFriend.parish}</div>
+            )}
             {activeMessages.map((message) => {
               const mine = message.senderId === me.id;
-              // A call invite is carried in the message text; it renders as a
-              // join card rather than a bubble of link text.
               const invite = decodeChatInvite(message.text);
               return (
                 <div
@@ -474,13 +474,13 @@ export function MessengerView() {
                           note={mine ? 'You started this call' : `${activeFriendName} started a call`}
                         />
                       ) : (
-                        <div className={`space-y-2 rounded-2xl p-2 text-sm ${
+                        <div className={`space-y-2 rounded-2xl p-2.5 text-sm ${
                           mine
                             ? 'rounded-tr-sm bg-gradient-to-br from-gold-400 to-gold-500 text-[#17130a]'
                             : 'rounded-tl-sm bg-ink-800 text-ink-100'
                         }`}>
                           {message.attachments?.map((attachment) => <MessageAttachment key={attachment.id} attachment={attachment} />)}
-                          {message.text && <div className="px-1.5 py-0.5 whitespace-pre-wrap break-words">{message.text}</div>}
+                          {message.text && <div className="px-1 py-0.5 whitespace-pre-wrap break-words">{message.text}</div>}
                         </div>
                       )}
                       <div className={`mt-0.5 flex items-center gap-1.5 text-[10px] text-ink-400 ${mine ? 'justify-end text-right' : ''}`}>
@@ -499,6 +499,7 @@ export function MessengerView() {
             )}
           </div>
 
+          {/* Footer / Input area */}
           <div className="border-t border-ink-700 bg-ink-850/95 p-3">
             {(pendingFiles.length > 0 || pendingVoice || recording) && (
               <div className="mb-3 flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
@@ -533,9 +534,13 @@ export function MessengerView() {
               </div>
             )}
             {composerError && <div className="mb-2 text-xs text-red-300">{composerError}</div>}
-            <div className="flex items-end gap-2">
+            
+            {/* Horizontal Input Container */}
+            <div className="flex items-center gap-2 w-full">
               <input ref={photoInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(event) => { addFiles(event.target.files, 'image'); event.target.value = ''; }} />
               <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => { addFiles(event.target.files, 'file'); event.target.value = ''; }} />
+              
+              {/* Media Buttons */}
               <div className="flex shrink-0 items-center gap-1 rounded-xl border border-ink-600 bg-ink-800/60 p-1">
                 <button type="button" onClick={() => photoInputRef.current?.click()} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Add photos" aria-label="Add photos"><Image size={17} /></button>
                 <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Attach files" aria-label="Attach files"><Paperclip size={17} /></button>
@@ -543,9 +548,11 @@ export function MessengerView() {
                 <button type="button" onClick={startVideoCall} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Start a video call" aria-label="Start a video call"><Video size={17} /></button>
                 <button type="button" onClick={sendLike} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Send a like" aria-label="Send a like"><ThumbsUp size={17} /></button>
               </div>
+
+              {/* Text Input Box */}
               <textarea
                 ref={messageInputRef}
-                rows={3}
+                rows={1}
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={(event) => {
@@ -556,9 +563,17 @@ export function MessengerView() {
                 }}
                 placeholder={recording ? 'Recording voice note…' : 'Type a message…'}
                 disabled={recording || uploading}
-                className="input min-h-[4.5rem] min-w-0 flex-1 resize-none py-3 leading-6"
+                className="input min-w-0 flex-1 resize-none py-2.5 px-3.5 leading-6 text-sm"
               />
-              <button onClick={() => void send()} disabled={uploading || recording || (!draft.trim() && pendingFiles.length === 0 && !pendingVoice)} className="gold-btn px-3 py-2.5" aria-label="Send message">
+
+              {/* Send Button */}
+              <button 
+                type="button"
+                onClick={() => void send()} 
+                disabled={uploading || recording || (!draft.trim() && pendingFiles.length === 0 && !pendingVoice)} 
+                className="gold-btn px-3.5 py-2.5 shrink-0 flex items-center gap-1.5" 
+                aria-label="Send message"
+              >
                 <Send size={16} />
                 <span className="hidden sm:inline">{uploading ? 'Uploading' : 'Send'}</span>
               </button>
