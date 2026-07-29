@@ -40,7 +40,7 @@ import { ProfileLink } from './ProfileLink';
 // Helper function to strip raw URLs from post body text when media is embedded
 function stripUrls(text: string) {
   if (!text) return '';
-  const urlRegex = /(https?:\/\/[^\s]+)/gi;
+  const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+|youtu\.be\/[^\s]+)/gi;
   return text.replace(urlRegex, '').trim();
 }
 
@@ -90,7 +90,7 @@ export function PostCard({ post }: { post: Post }) {
     ? null
     : extractEmbeddedVideoUrl(rawBodyText) ?? extractExternalUrl(rawBodyText);
 
-  // If there's an embedded video or video attachment, clean raw URLs out of the body text
+  // Filter out raw video URLs if an embedded player or video attachment exists
   const hasVideoMedia = Boolean(embeddedVideoUrl || videoUrl);
   const cleanedBodyText = hasVideoMedia ? stripUrls(rawBodyText) : rawBodyText;
   const linkedText = linkifyText(cleanedBodyText);
@@ -196,8 +196,8 @@ export function PostCard({ post }: { post: Post }) {
         </div>
       )}
 
-      {/* Cleaned Text (Only shows text, no raw video links) */}
-      {cleanedBodyText && (
+      {/* Clean Text (Renders only if non-empty text remains after stripping the link) */}
+      {cleanedBodyText.length > 0 && (
         <div className="whitespace-pre-wrap px-4 pb-3 text-[15px] leading-relaxed text-ink-100">
           {linkedText.map((part, index) => part.href ? (
             <a
