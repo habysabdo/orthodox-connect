@@ -60,7 +60,7 @@ const en: Dict = {
   // Common actions
   'common.cancel': 'Cancel',
   'common.save': 'Save changes',
-  'common.signOut': 'Sign out',
+  'common.signOut': 'Logout',
   'common.admin': 'Admin',
 
   // Profile

@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarDays, CheckCircle2, Church, Edit3, Globe, KeyRound, Loader2, Mail, MessageSquare, Share2, UserPlus, Users } from 'lucide-react';
+import { ArrowLeft, CalendarDays, CheckCircle2, Church, Edit3, Globe, KeyRound, Loader2, LogOut, Mail, MessageSquare, Share2, UserPlus, Users } from 'lucide-react';
 import { Avatar, Modal } from './ui';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { useStore, friendsOf, friendshipBetween } from '@/store/context';
@@ -260,6 +260,15 @@ export function ProfileView() {
                   </button>
                   <button onClick={openEditor} className="ghost-btn py-2 text-xs">
                     <Edit3 size={13} /> {t('profile.editProfile')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={state.signOut}
+                    className="group flex items-center gap-1.5 rounded-lg border border-red-400/45 bg-red-500/10 px-3 py-2 text-xs font-bold text-red-200 transition-all hover:border-red-300/70 hover:bg-red-500/20 hover:text-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/70"
+                    aria-label={t('common.signOut')}
+                  >
+                    <LogOut size={14} className="transition-transform group-hover:translate-x-0.5" />
+                    {t('common.signOut')}
                   </button>
                 </>
               ) : (
