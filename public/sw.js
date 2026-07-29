@@ -6,6 +6,10 @@ var RUNTIME = 'oc-runtime-' + VERSION;
 var PRECACHE_URLS = ['/', '/index.html', '/manifest.json', '/icon.svg', '/icon-192.png', '/icon-512.png'];
 
 if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') {
+  
+  // -------------------------------------------------------------
+  // INSTALL EVENT
+  // -------------------------------------------------------------
   self.addEventListener('install', function (event) {
     try {
       if (!self.caches) return;
@@ -13,13 +17,16 @@ if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') 
         caches.open(APP_SHELL)
           .then(function (cache) { return cache.addAll(PRECACHE_URLS); })
           .then(function () { return self.skipWaiting(); })
-          .catch(function (error) { console.warn('Service worker install was skipped.', error); }),
+          .catch(function (error) { console.warn('Service worker install was skipped.', error); })
       );
     } catch (error) {
       console.warn('Service worker install is unavailable.', error);
     }
   });
 
+  // -------------------------------------------------------------
+  // ACTIVATE EVENT
+  // -------------------------------------------------------------
   self.addEventListener('activate', function (event) {
     try {
       if (!self.caches) return;
@@ -33,13 +40,16 @@ if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') 
             }));
           })
           .then(function () { return self.clients && self.clients.claim ? self.clients.claim() : undefined; })
-          .catch(function (error) { console.warn('Service worker activation was skipped.', error); }),
+          .catch(function (error) { console.warn('Service worker activation was skipped.', error); })
       );
     } catch (error) {
       console.warn('Service worker activation is unavailable.', error);
     }
   });
 
+  // -------------------------------------------------------------
+  // FETCH EVENT
+  // -------------------------------------------------------------
   self.addEventListener('fetch', function (event) {
     try {
       if (!self.caches || !event.request || event.request.method !== 'GET') return;
@@ -65,13 +75,12 @@ if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') 
             return caches.match(request).then(function (cached) {
               return cached || caches.match('/index.html');
             });
-          }),
+          })
         );
         return;
       }
 
-      // Vite filenames are content-hashed. Let the browser fetch them directly
-      // so an old service worker cannot keep JavaScript from a previous deploy.
+      // Vite filenames are content-hashed. Let the browser fetch directly.
       if (url.origin === self.location.origin && url.pathname.indexOf('/assets/') === 0) {
         return;
       }
@@ -89,7 +98,7 @@ if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') 
               return response;
             }).catch(function () { return cached; });
             return cached || network;
-          }).catch(function () { return fetch(request); }),
+          }).catch(function () { return fetch(request); })
         );
       }
     } catch (error) {
@@ -97,66 +106,89 @@ if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') 
     }
   });
 
-  if (self.registration && 'pushManager' in self.registration && typeof self.registration.showNotification === 'function') {
-    self.addEventListener('push', function (event) {
+  // -------------------------------------------------------------
+  // PUSH EVENT (FIXED: Unwrapped from conditional check)
+  // -------------------------------------------------------------
+  self.addEventListener('push', function (event) {
+    try {
+      var data = {};
       try {
-        var data = {};
-        try {
-          data = event.data ? event.data.json() : {};
-        } catch (parseError) {
-          data = { body: event.data ? event.data.text() : 'You received a new message.' };
-        }
-
-        var notificationData = data.data || {};
-        notificationData.url = data.url || notificationData.url || '/chat';
-        event.waitUntil(
-          self.registration.showNotification(data.title || 'New Message', {
-            body: data.body || 'You received a new message.',
-            icon: data.icon || '/icon-192.png',
-            badge: data.badge || '/icon-192.png',
-            tag: data.tag || 'orthodoxconnect-message',
-            renotify: true,
-            data: notificationData,
-          }).catch(function (error) { console.warn('Push notification display failed.', error); }),
-        );
-      } catch (error) {
-        console.warn('Push notification handling was skipped.', error);
+        data = event.data ? event.data.json() : {};
+      } catch (parseError) {
+        data = { body: event.data ? event.data.text() : 'You received a new message.' };
       }
-    });
 
-    self.addEventListener('notificationclick', function (event) {
-      try {
-        if (event.notification) event.notification.close();
-        var notificationData = event.notification && event.notification.data ? event.notification.data : {};
-        var destination = new URL(notificationData.url || '/', self.location.origin).href;
-        if (!self.clients || typeof self.clients.matchAll !== 'function') return;
+      var notificationData = data.data || {};
+      notificationData.url = data.url || notificationData.url || '/chat';
+
+      var title = data.title || 'New Message';
+      var options = {
+        body: data.body || 'You received a new message.',
+        icon: data.icon || '/icon-192.png',
+        badge: data.badge || '/icon-192.png',
+        tag: data.tag || 'orthodoxconnect-message',
+        renotify: true,
+        data: notificationData,
+      };
+
+      if (self.registration && typeof self.registration.showNotification === 'function') {
         event.waitUntil(
-          self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clients) {
-            var exact = clients.find(function (client) { return client.url === destination; });
-            if (exact && typeof exact.focus === 'function') return exact.focus();
+          self.registration.showNotification(title, options).catch(function (error) {
+            console.warn('Push notification display failed.', error);
+          })
+        );
+      }
+    } catch (error) {
+      console.warn('Push notification handling was skipped.', error);
+    }
+  });
 
-            var existing = clients.find(function (client) {
-              try {
-                return new URL(client.url).origin === self.location.origin;
-              } catch (error) {
-                return false;
-              }
-            });
-            if (existing) {
-              var navigation = typeof existing.navigate === 'function' ? existing.navigate(destination) : Promise.resolve(existing);
-              return navigation.then(function () {
-                return typeof existing.focus === 'function' ? existing.focus() : existing;
-              });
+  // -------------------------------------------------------------
+  // NOTIFICATION CLICK EVENT (FIXED: Unwrapped from conditional check)
+  // -------------------------------------------------------------
+  self.addEventListener('notificationclick', function (event) {
+    try {
+      if (event.notification) event.notification.close();
+      var notificationData = event.notification && event.notification.data ? event.notification.data : {};
+      var destination = new URL(notificationData.url || '/', self.location.origin).href;
+
+      if (!self.clients || typeof self.clients.matchAll !== 'function') return;
+
+      event.waitUntil(
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clients) {
+          // 1. If exact route is open, focus it
+          var exact = clients.find(function (client) { return client.url === destination; });
+          if (exact && typeof exact.focus === 'function') return exact.focus();
+
+          // 2. If app tab is open on another route, navigate and focus it
+          var existing = clients.find(function (client) {
+            try {
+              return new URL(client.url).origin === self.location.origin;
+            } catch (error) {
+              return false;
             }
-            return typeof self.clients.openWindow === 'function' ? self.clients.openWindow(destination) : undefined;
-          }).catch(function (error) { console.warn('Notification click handling failed.', error); }),
-        );
-      } catch (error) {
-        console.warn('Notification click handling was skipped.', error);
-      }
-    });
-  }
+          });
 
+          if (existing) {
+            var navigation = typeof existing.navigate === 'function' ? existing.navigate(destination) : Promise.resolve(existing);
+            return navigation.then(function (client) {
+              var targetClient = client || existing;
+              return typeof targetClient.focus === 'function' ? targetClient.focus() : targetClient;
+            });
+          }
+
+          // 3. If closed completely, open a new window
+          return typeof self.clients.openWindow === 'function' ? self.clients.openWindow(destination) : undefined;
+        }).catch(function (error) { console.warn('Notification click handling failed.', error); })
+      );
+    } catch (error) {
+      console.warn('Notification click handling was skipped.', error);
+    }
+  });
+
+  // -------------------------------------------------------------
+  // MESSAGE EVENT
+  // -------------------------------------------------------------
   self.addEventListener('message', function (event) {
     try {
       if (event.data === 'SKIP_WAITING' && typeof self.skipWaiting === 'function') self.skipWaiting();
