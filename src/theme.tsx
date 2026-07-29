@@ -24,36 +24,22 @@ function initialTheme(): Theme {
       return stored;
     }
   } catch {
-    // fallback if localStorage isn't available
+    // fallback if localStorage is unavailable
   }
   return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(initialTheme);
+  const [theme, setThemeState] = useState<Theme>(initialTheme);
 
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
 
-  // Cycle through Light -> Dark -> Ancient -> Light
-  const toggleTheme = () => {
-    const nextTheme: Theme = theme === 'light' ? 'dark' : theme === 'dark' ? 'ancient' : 'light';
+  const setTheme = (newTheme: Theme) => {
     const root = document.documentElement;
     root.classList.add('theme-transition');
-    setTheme(nextTheme);
-    try {
-      localStorage.setItem(STORAGE_KEY, nextTheme);
-    } catch {
-      root.dataset.themeStorage = 'session';
-    }
-    window.setTimeout(() => root.classList.remove('theme-transition'), 320);
-  };
-
-  const setThemeExplicit = (newTheme: Theme) => {
-    const root = document.documentElement;
-    root.classList.add('theme-transition');
-    setTheme(newTheme);
+    setThemeState(newTheme);
     try {
       localStorage.setItem(STORAGE_KEY, newTheme);
     } catch {
@@ -62,8 +48,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     window.setTimeout(() => root.classList.remove('theme-transition'), 320);
   };
 
+  const toggleTheme = () => {
+    const nextTheme: Theme = theme === 'light' ? 'dark' : theme === 'dark' ? 'ancient' : 'light';
+    setTheme(nextTheme);
+  };
+
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme: setThemeExplicit }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
       {children}
     </ThemeContext.Provider>
   );
