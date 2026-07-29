@@ -1,6 +1,5 @@
 /* --------------------------------------------------
    GOOGLE FONTS IMPORT FOR ANCIENT THEME
-   (@import must come first — only @charset may precede)
 -------------------------------------------------- */
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap');
 
@@ -69,33 +68,31 @@
 }
 
 /* --------------------------------------------------
-   ANCIENT / PAPYRUS THEME OVERRIDE
+   ANCIENT / PAPYRUS THEME OVERRIDES & EFFECTS
 -------------------------------------------------- */
 html.ancient,
 .ancient {
   color-scheme: light;
   
-  /* Earthy Ink / Parchment Palette */
-  --ink-50: 43 30 22;       /* Very dark ink for headings */
-  --ink-100: 59 43 31;      /* Deep ink for main text */
-  --ink-200: 89 68 50;      /* Muted text */
+  --ink-50: 43 30 22;       /* Heading ink */
+  --ink-100: 59 43 31;      /* Text ink */
+  --ink-200: 89 68 50;      /* Secondary text */
   --ink-300: 115 90 68;
   --ink-400: 140 112 87;
   --ink-500: 168 138 109;
-  --ink-600: 194 167 136;   /* Borders & dividers */
-  --ink-700: 212 187 155;
-  --ink-750: 224 201 170;
-  --ink-800: 232 212 183;   /* Light card highlight */
-  --ink-850: 244 235 208;   /* Main card surface (papyrus) */
-  --ink-900: 238 226 196;   /* Slightly darker scroll background */
-  --ink-950: 232 220 196;   /* Page background (ancient wall/table) */
+  --ink-600: 184 150 112;    /* Border lines */
+  --ink-700: 202 172 135;
+  --ink-750: 218 191 154;
+  --ink-800: 232 210 176;    /* Card highlights */
+  --ink-850: 242 226 192;    /* Main papyrus surface */
+  --ink-900: 230 212 174;    /* Sidebar surface */
+  --ink-950: 218 198 158;    /* Background ambient */
 
-  /* Aged Gold / Crimson Accent Variables */
   --gold-50: 255 248 230;
   --gold-100: 247 230 185;
   --gold-200: 230 195 120;
   --gold-300: 204 153 65;
-  --gold-400: 180 120 30;   /* Deep ancient gold */
+  --gold-400: 180 120 30;    /* Deep gold accent */
   --gold-500: 150 90 20;
   --gold-600: 120 70 15;
   --gold-700: 90 50 10;
@@ -103,14 +100,46 @@ html.ancient,
   --gold-900: 35 15 2;
 
   --shadow-gold: 0 0 0 1px rgba(180, 120, 30, 0.4), 0 4px 15px rgba(80, 50, 20, 0.15);
-  --shadow-card: inset 0 0 15px rgba(100, 70, 40, 0.12), 0 4px 12px rgba(60, 40, 20, 0.1);
+  --shadow-card: inset 0 0 20px rgba(120, 85, 45, 0.18), 0 6px 16px rgba(50, 30, 10, 0.15);
 }
 
-/* Force Ancient Typography & Smooth Transitions */
+/* Ancient Papyrus Background & Font Styling */
 html.ancient body {
   font-family: 'Cinzel', 'Georgia', serif !important;
-  background-color: rgb(var(--ink-950)) !important;
-  color: rgb(var(--ink-100)) !important;
+  background-color: #d2bc96 !important;
+  background-image: 
+    radial-gradient(#bca17a 1px, transparent 1px), 
+    radial-gradient(#bca17a 1px, #d2bc96 1px) !important;
+  background-size: 32px 32px !important;
+  background-position: 0 0, 16px 16px !important;
+  color: #3b2b1f !important;
+}
+
+/* Transform Cards into Illuminated Parchment Sheets */
+html.ancient .card,
+html.ancient [class*="bg-ink-850"],
+html.ancient [class*="bg-ink-900"] {
+  background-color: #f2e2c0 !important;
+  border: 2px double #b89768 !important;
+  border-radius: 6px !important;
+  box-shadow: inset 0 0 22px rgba(110, 75, 35, 0.18), 0 6px 16px rgba(45, 28, 12, 0.16) !important;
+  color: #3b2b1f !important;
+}
+
+/* Left Sidebar Roll / Scroll Edge Effect */
+html.ancient aside,
+html.ancient [class*="w-64"] {
+  background: linear-gradient(180deg, #dfc7a0 0%, #f0dec0 50%, #dfc7a0 100%) !important;
+  border-right: 3px double #a88352 !important;
+  box-shadow: 6px 0 20px rgba(50, 30, 10, 0.18) !important;
+}
+
+/* Deep Crimson Wax Seals for Badges */
+html.ancient [class*="bg-red-"],
+html.ancient [class*="bg-amber-"] {
+  background-color: #8b1818 !important;
+  color: #fdf6e2 !important;
+  box-shadow: 0 0 8px rgba(139, 24, 24, 0.5) !important;
 }
 
 html,
