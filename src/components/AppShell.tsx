@@ -1,4 +1,4 @@
-import { Menu, Radio, Users, Video } from 'lucide-react';
+import { Menu, Users, Video } from 'lucide-react';
 import { Avatar, FeedSkeleton, Logo } from './ui';
 import { useStore } from '@/store/context';
 import { useUI } from '@/store/ui';
@@ -38,7 +38,6 @@ export function AppShell() {
     setView,
     groupRouteId,
     goLiveOpen,
-    setGoLiveOpen,
     setPrayerMeetingOpen,
     openStreamId,
     shareOpen,
@@ -137,26 +136,6 @@ export function AppShell() {
               aria-label="Start a prayer meeting"
             >
               <Video size={17} />
-            </button>
-
-            {/* Go Live in header */}
-            <button
-              onClick={() => setGoLiveOpen(true)}
-              className="gold-btn hidden h-9 shrink-0 rounded-full px-3 py-0 text-sm lg:flex"
-            >
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-red-500/70" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
-              </span>
-              {t('header.goLive')}
-            </button>
-            <button
-              onClick={() => setGoLiveOpen(true)}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-600 text-white shadow-sm transition-colors hover:bg-red-500 lg:hidden"
-              title={t('header.goLive')}
-              aria-label={t('header.goLive')}
-            >
-              <Radio size={17} />
             </button>
 
             <button
