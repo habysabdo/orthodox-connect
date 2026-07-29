@@ -591,3 +591,13 @@ export function MessengerView() {
                 <span>{uploading ? 'Uploading' : 'Send'}</span>
               </button>
             </div>
+          </div>
+        </div>
+      ) : (
+        <div className="hidden flex-1 items-center justify-center p-8 md:flex">
+          <EmptyState icon={<MessageCircle size={26} />} title="Select a conversation" subtitle="Pick a friend on the left to view your message history." />
+        </div>
+      )}
+    </div>
+  );
+}
