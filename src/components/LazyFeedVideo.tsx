@@ -42,7 +42,7 @@ export const LazyFeedVideo = memo(function LazyFeedVideo({
   }, [videoUrl]);
 
   useEffect(() => {
-    if (!videoUrl || active) return; // Stop observing once the video is active!
+    if (!videoUrl || active) return;
     const container = containerRef.current;
     if (!container) return;
 
@@ -79,10 +79,10 @@ export const LazyFeedVideo = memo(function LazyFeedVideo({
   if (!videoUrl) return null;
 
   return (
-    <div ref={containerRef} className="relative min-h-[200px]">
+    <div ref={containerRef} className="relative w-full aspect-video overflow-hidden rounded-2xl bg-black">
       {playbackFailed ? (
         <div
-          className={`relative flex flex-col items-center justify-center gap-3 overflow-hidden bg-black px-6 text-center text-white ${posterClassName || className}`}
+          className={`absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black px-6 text-center text-white ${posterClassName || className}`}
           role="alert"
         >
           {preview ? <img src={preview} alt="" className="absolute inset-0 h-full w-full object-contain opacity-30" /> : null}
@@ -108,7 +108,7 @@ export const LazyFeedVideo = memo(function LazyFeedVideo({
           name="Feed video"
           resetKeys={[videoUrl]}
           fallback={(reset) => (
-            <div className={`grid place-items-center bg-black px-6 text-center ${posterClassName || className}`} role="alert">
+            <div className={`absolute inset-0 grid place-items-center bg-black px-6 text-center ${posterClassName || className}`} role="alert">
               <div>
                 <AlertCircle size={30} className="mx-auto text-red-300" aria-hidden="true" />
                 <p className="mt-3 text-sm font-semibold text-white">Video playback unavailable</p>
@@ -134,7 +134,7 @@ export const LazyFeedVideo = memo(function LazyFeedVideo({
             loop={loop}
             autoPlay={autoPlay}
             title={title}
-            className={className}
+            className="h-full w-full object-contain"
             onPlay={handlePlay}
             onError={() => setPlaybackFailed(true)}
           />
@@ -146,7 +146,7 @@ export const LazyFeedVideo = memo(function LazyFeedVideo({
             setAutoPlay(true);
             setActive(true);
           }}
-          className={`group relative flex w-full items-center justify-center overflow-hidden bg-black ${posterClassName || className}`}
+          className="group absolute inset-0 flex h-full w-full items-center justify-center overflow-hidden bg-black"
           aria-label={title ? `Play ${title}` : 'Play video'}
         >
           {preview ? (
