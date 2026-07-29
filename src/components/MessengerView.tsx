@@ -217,7 +217,7 @@ export function MessengerView() {
     };
   }, [activeThreadId, activeThreadMessageCount, markThreadRead]);
 
-  // Handle textarea height dynamically
+  // Handle textarea height dynamically without forcing high minHeight
   useEffect(() => {
     const textarea = messageInputRef.current;
     if (!textarea) return;
@@ -549,7 +549,7 @@ export function MessengerView() {
                 <button type="button" onClick={sendLike} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Send a like" aria-label="Send a like"><ThumbsUp size={17} /></button>
               </div>
 
-              {/* Text Input Box */}
+              {/* Text Input Box (Purposely omitting global 'input' class) */}
               <textarea
                 ref={messageInputRef}
                 rows={1}
@@ -563,7 +563,8 @@ export function MessengerView() {
                 }}
                 placeholder={recording ? 'Recording voice note…' : 'Type a message…'}
                 disabled={recording || uploading}
-                className="input min-w-0 flex-1 resize-none py-2.5 px-3.5 leading-6 text-sm"
+                style={{ height: 'auto' }}
+                className="block w-full flex-1 min-w-0 resize-none rounded-xl border border-ink-600 bg-ink-800/80 px-4 py-2 text-sm text-ink-100 placeholder-ink-400 outline-none focus:border-gold-400 focus:ring-1 focus:ring-gold-400 disabled:opacity-50"
               />
 
               {/* Send Button */}
@@ -571,7 +572,7 @@ export function MessengerView() {
                 type="button"
                 onClick={() => void send()} 
                 disabled={uploading || recording || (!draft.trim() && pendingFiles.length === 0 && !pendingVoice)} 
-                className="gold-btn px-3.5 py-2.5 shrink-0 flex items-center gap-1.5" 
+                className="gold-btn px-3.5 py-2 shrink-0 flex items-center gap-1.5" 
                 aria-label="Send message"
               >
                 <Send size={16} />
