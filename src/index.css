@@ -1,11 +1,12 @@
+/* --------------------------------------------------
+   GOOGLE FONTS IMPORT FOR ANCIENT THEME
+   (@import must come first — only @charset may precede)
+-------------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* --------------------------------------------------
-   GOOGLE FONTS IMPORT FOR ANCIENT THEME
--------------------------------------------------- */
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap');
 
 :root {
   color-scheme: light;
