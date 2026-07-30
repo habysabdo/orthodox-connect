@@ -11,6 +11,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json"
   },
   "dependencies": {
+    "@capacitor/android": "^8.4.2",
+    "@capacitor/core": "^8.4.2",
+    "@capacitor/ios": "^8.4.2",
     "@jitsi/react-sdk": "^1.4.4",
     "@mux/mux-node": "^14.1.1",
     "@mux/mux-player-react": "^3.13.0",
@@ -34,6 +37,7 @@
     "whatwg-fetch": "^3.6.20"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.4.2",
     "@eslint/js": "^9.9.1",
     "@netlify/edge-functions": "^3.0.8",
     "@types/react": "^18.3.5",
