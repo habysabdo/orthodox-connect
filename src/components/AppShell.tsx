@@ -27,6 +27,7 @@ import { FeedView } from './FeedView';
 import { ReelsView } from './ReelsView';
 import { MessengerView } from './MessengerView';
 import { CalendarView } from './CalendarView';
+import { NetworkView } from './NetworkView';
 import { GroupsView } from './GroupsView';
 import { GroupFeedView } from './GroupFeedView';
 import { ProfileView } from './ProfileView';
@@ -231,10 +232,12 @@ export function AppShell() {
               <Clapperboard size={22} />
             </button>
             <button
-              onClick={() => setView('groups')}
+              onClick={() => setView('network')}
               className={`flex flex-1 items-center justify-center py-2.5 border-b-2 transition-colors ${
-                view === 'groups' ? 'border-gold-400 text-gold-300' : 'border-transparent text-ink-400 hover:text-ink-100'
+                view === 'network' ? 'border-gold-400 text-gold-300' : 'border-transparent text-ink-400 hover:text-ink-100'
               }`}
+              aria-label={t('nav.network')}
+              title={t('nav.network')}
             >
               <Users size={22} />
             </button>
@@ -289,6 +292,7 @@ export function AppShell() {
         <main className="flex-1 min-w-0 overflow-y-auto">
           {view === 'feed' && <FeedView />}
           {view === 'reels' && <ReelsView />}
+          {view === 'network' && <NetworkView />}
           {view === 'messenger' && <MessengerView />}
           {view === 'calendar' && <CalendarView />}
           {view === 'groups' && (groupRouteId ? <GroupFeedView groupId={groupRouteId} /> : <GroupsView />)}

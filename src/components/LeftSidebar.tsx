@@ -1,4 +1,5 @@
 import {
+  HeartHandshake,
   LogOut,
   Radio,
   Share2,
@@ -20,7 +21,7 @@ import { LanguageSwitcher } from './LanguageSwitcher';
 export function LeftSidebar({ onClose }: { onClose?: () => void }) {
   const state = useStore();
   const { users, currentUserId, signOut } = state;
-  const { setView, setGoLiveOpen, setShareOpen, setPrayerMeetingOpen } = useUI();
+  const { view, setView, setGoLiveOpen, setShareOpen, setPrayerMeetingOpen } = useUI();
   const { t } = useI18n();
   const { theme, toggleTheme } = useTheme();
 
@@ -96,6 +97,23 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
 
         {/* Menu Utilities (Non-duplicated items) */}
         <nav className="flex flex-col gap-1 pt-2">
+          <button
+            onClick={() => {
+              onClose?.();
+              setView('groups');
+            }}
+            className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
+              view === 'groups' || view === 'group'
+                ? 'bg-gold-400/15 text-gold-200'
+                : 'text-ink-300 hover:bg-ink-800 hover:text-ink-100'
+            }`}
+          >
+            <span className={view === 'groups' || view === 'group' ? 'text-gold-300' : 'text-ink-400 group-hover:text-gold-300'}>
+              <HeartHandshake size={20} />
+            </span>
+            <span className="flex-1 text-left">{t('nav.groups')}</span>
+          </button>
+
           {/* Invite Friends */}
           <button
             onClick={openShare}
