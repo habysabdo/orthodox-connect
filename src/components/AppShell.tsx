@@ -1,277 +1,117 @@
-import { Menu, Users, Video } from 'lucide-react';
-import { Avatar, FeedSkeleton, Logo } from './ui';
+import { useEffect, useRef, useState } from 'react';
+import { Search, UserCircle, X } from 'lucide-react';
+import { Avatar } from './ui';
 import { useStore } from '@/store/context';
 import { useUI } from '@/store/ui';
-import { useI18n } from '@/i18n';
-import { NotificationBell } from './NotificationBell';
-import { AdminNotificationBell } from './AdminNotificationBell';
-import { lazy, Suspense, useEffect, useState } from 'react';
-import { hasAdminAccess } from '@/utils/users';
-import { ErrorBoundary } from './ErrorBoundary';
 
-// Route views, sidebars, search, and overlays are fetched only when rendered.
-// This keeps the authenticated shell small while retaining every existing view.
-const FeedView = lazy(() => import('./FeedView').then((m) => ({ default: m.FeedView })));
-const GroupFeedView = lazy(() => import('./GroupFeedView').then((m) => ({ default: m.GroupFeedView })));
-const GroupsView = lazy(() => import('./GroupsView').then((m) => ({ default: m.GroupsView })));
-const NetworkView = lazy(() => import('./NetworkView').then((m) => ({ default: m.NetworkView })));
-const MessengerView = lazy(() => import('./MessengerView').then((m) => ({ default: m.MessengerView })));
-const CalendarView = lazy(() => import('./CalendarView').then((m) => ({ default: m.CalendarView })));
-const AdminView = lazy(() => import('./AdminView').then((m) => ({ default: m.AdminView })));
-const ProfileView = lazy(() => import('./ProfileView').then((m) => ({ default: m.ProfileView })));
-const ReelsView = lazy(() => import('./ReelsView').then((m) => ({ default: m.ReelsView })));
-const MeetingView = lazy(() => import('./MeetingView').then((m) => ({ default: m.MeetingView })));
-const GoLiveModal = lazy(() => import('./GoLiveModal').then((m) => ({ default: m.GoLiveModal })));
-const StreamViewer = lazy(() => import('./StreamViewer').then((m) => ({ default: m.StreamViewer })));
-const ShareModal = lazy(() => import('./ShareModal').then((m) => ({ default: m.ShareModal })));
-const GlobalSearch = lazy(() => import('./GlobalSearch').then((m) => ({ default: m.GlobalSearch })));
-const LeftSidebar = lazy(() => import('./LeftSidebar').then((m) => ({ default: m.LeftSidebar })));
-const RightSidebar = lazy(() => import('./RightSidebar').then((m) => ({ default: m.RightSidebar })));
-const PrayerMeetingModal = lazy(() => import('./PrayerMeetingModal').then((m) => ({ default: m.PrayerMeetingModal })));
-const InstallPrompt = lazy(() => import('./InstallPrompt').then((m) => ({ default: m.InstallPrompt })));
-const NotificationToasts = lazy(() => import('./NotificationToasts').then((m) => ({ default: m.NotificationToasts })));
+export function AppShell({ children }: { children?: React.ReactNode }) {
+  const [query, setQuery] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-export function AppShell() {
-  const { users, currentUserId, groups, groupsLoading, activeGroupId, setActiveGroup } = useStore();
-  const {
-    view,
-    setView,
-    groupRouteId,
-    goLiveOpen,
-    setPrayerMeetingOpen,
-    openStreamId,
-    shareOpen,
-    rightOpen,
-    setRightOpen,
-    openThreadId,
-  } = useUI();
-  const { t } = useI18n();
+  const state = useStore();
+  const { users } = state;
+  const { setView } = useUI();
+
+  // Close search dropdown when clicking anywhere outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent | TouchEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
+
+  // Filter users based on query
+  const trimmed = query.trim().toLowerCase();
   const safeUsers = Array.isArray(users) ? users : [];
-  const me = safeUsers.find((u) => u?.id === currentUserId);
-  const adminAccess = hasAdminAccess(me);
-  const [leftOpen, setLeftOpen] = useState(false);
+  const matchingUsers = trimmed
+    ? safeUsers.filter(
+        (u) =>
+          u?.name?.toLowerCase().includes(trimmed) ||
+          (u?.parish && u.parish.toLowerCase().includes(trimmed))
+      )
+    : [];
 
-  useEffect(() => {
-    if (view === 'admin' && !adminAccess) setView('feed');
-  }, [adminAccess, setView, view]);
-
-  useEffect(() => {
-    const groupList = Array.isArray(groups) ? groups : [];
-    if (view === 'group' && groupRouteId) {
-      if (!groupsLoading && !groupList.some((group) => group?.id === groupRouteId)) {
-        setView('groups');
-        return;
-      }
-      if (activeGroupId !== groupRouteId) {
-        void setActiveGroup(groupRouteId).catch((error) => console.error('Failed to open group', error));
-      }
-      return;
-    }
-    if (activeGroupId !== null) {
-      void setActiveGroup(null).catch((error) => console.error('Failed to close group', error));
-    }
-  }, [activeGroupId, groupRouteId, groups, groupsLoading, setActiveGroup, setView, view]);
-
-  if (!me) return <FeedSkeleton />;
-
-  // A meeting takes over the whole screen — the conference needs the height, and
-  // the sidebars are noise while praying together.
-  if (view === 'meet') {
-    return (
-      <ErrorBoundary name="Prayer meeting" variant="section" resetKeys={[view]}>
-        <Suspense fallback={<div className="min-h-screen bg-ink-950" />}>
-          <MeetingView />
-        </Suspense>
-      </ErrorBoundary>
-    );
-  }
+  const handleSelectUser = (userId: string) => {
+    setIsOpen(false);
+    setQuery('');
+    setView('profile');
+  };
 
   return (
-    <div className="min-h-screen bg-ink-950 text-ink-100">
-      {/* Top bar */}
-      <header className="sticky top-0 z-30 border-b border-ink-800 bg-ink-950/85 backdrop-blur-md">
-        <div className="mx-auto flex h-14 max-w-[1500px] items-center gap-1.5 px-3 sm:gap-2 sm:px-4">
-          <button
-            onClick={() => setLeftOpen(true)}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-300 transition-colors hover:bg-ink-800 hover:text-gold-200 lg:hidden"
-            aria-label="Open navigation menu"
-          >
-            <Menu size={20} />
-          </button>
-
-          <button onClick={() => setView('feed')} className="hidden h-9 shrink-0 items-center sm:flex" aria-label={t('nav.feed')}>
-            <Logo size={32} withText />
-          </button>
-          <button onClick={() => setView('feed')} className="flex h-9 shrink-0 items-center sm:hidden" aria-label={t('nav.feed')}>
-            <Logo size={32} />
-          </button>
-
-          {/* Global search — full bar on md+, collapses to an icon below md */}
-          <ErrorBoundary
-            name="Search"
-            resetKeys={[currentUserId]}
-            fallback={(reset) => (
-              <button type="button" onClick={reset} className="ghost-btn h-9 shrink-0 px-3 text-xs">
-                Retry search
-              </button>
-            )}
-          >
-            <Suspense fallback={<div className="h-9 w-9 shrink-0 rounded-full bg-ink-850 md:mx-2 md:flex-1 md:max-w-md" />}>
-              <GlobalSearch className="min-w-0 shrink-0 md:mx-2 md:flex-1 md:max-w-md" />
-            </Suspense>
-          </ErrorBoundary>
-
-          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
-            {/* Start Prayer Meeting in header */}
-            <button
-              onClick={() => setPrayerMeetingOpen(true)}
-              className="ghost-btn hidden h-9 shrink-0 rounded-full px-3 py-0 text-sm lg:flex"
-            >
-              <Video size={16} /> Prayer Meeting
-            </button>
-            <button
-              onClick={() => setPrayerMeetingOpen(true)}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-ink-700 bg-ink-850 text-ink-300 shadow-sm transition-colors hover:border-gold-400/60 hover:bg-ink-800 hover:text-gold-200 lg:hidden"
-              title="Start a prayer meeting"
-              aria-label="Start a prayer meeting"
-            >
-              <Video size={17} />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setView('network')}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-ink-700 bg-ink-850 text-ink-300 shadow-sm transition-colors hover:border-gold-400/60 hover:bg-ink-800 hover:text-gold-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-950"
-              aria-label={t('nav.network')}
-              title={t('nav.network')}
-            >
-              <Users size={19} aria-hidden="true" />
-            </button>
-
-            <ErrorBoundary
-              name="Notifications"
-              resetKeys={[currentUserId]}
-              fallback={<span className="h-9 w-9 shrink-0 rounded-full bg-ink-850" aria-label="Notifications unavailable" />}
-            >
-              <NotificationBell
-                activeThreadId={view === 'messenger' ? openThreadId : null}
-              />
-            </ErrorBoundary>
-
-            {adminAccess && (
-              <ErrorBoundary
-                name="Admin notifications"
-                resetKeys={[currentUserId]}
-                fallback={<span className="h-9 w-9 shrink-0 rounded-full bg-ink-850" aria-label="Admin notifications unavailable" />}
+    <div className="relative min-h-screen bg-ink-950 text-ink-100">
+      {/* Top Search Bar / Header Wrapper */}
+      <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-ink-700/60 bg-ink-900/80 px-4 backdrop-blur-md">
+        {/* Facebook-Style Search Input & Floating Dropdown */}
+        <div ref={containerRef} className="relative w-full max-w-md">
+          <div className="relative flex items-center">
+            <Search size={18} className="absolute left-3.5 text-ink-400 pointer-events-none" />
+            <input
+              type="text"
+              value={query}
+              onFocus={() => setIsOpen(true)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setIsOpen(true);
+              }}
+              placeholder="SEARCH PEOPLE, CHURCHES, GROUPS..."
+              className="w-full rounded-full border border-ink-700 bg-ink-850 py-2 pl-10 pr-9 text-xs tracking-wider uppercase text-ink-100 placeholder-ink-400 outline-none transition-all focus:border-gold-400/70 focus:ring-2 focus:ring-gold-400/20"
+            />
+            {query ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery('');
+                  setIsOpen(false);
+                }}
+                className="absolute right-3 rounded-full p-1 text-ink-400 hover:bg-ink-750 hover:text-ink-100"
               >
-                <AdminNotificationBell />
-              </ErrorBoundary>
-            )}
-
-            <button
-              onClick={() => setView('profile')}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-950"
-              aria-label={t('nav.profile')}
-            >
-              <Avatar src={me.photo} name={me.name} size={34} ring="gold" online />
-            </button>
+                <X size={14} />
+              </button>
+            ) : null}
           </div>
+
+          {/* Floating Dropdown Results (Non-Blocking) */}
+          {isOpen && trimmed.length > 0 && (
+            <div className="absolute left-0 right-0 top-full mt-2 max-h-80 overflow-y-auto rounded-2xl border border-ink-700 bg-ink-850 p-2 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-2">
+              {matchingUsers.length > 0 ? (
+                <div className="space-y-1">
+                  <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gold-400">
+                    People & Parishes
+                  </div>
+                  {matchingUsers.map((u) => (
+                    <button
+                      key={u.id}
+                      onClick={() => handleSelectUser(u.id)}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors hover:bg-ink-750"
+                    >
+                      <Avatar src={u.photo} name={u.name} size={36} ring="gold" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold text-ink-100">{u.name}</div>
+                        <div className="truncate text-xs text-ink-400">{u.parish || 'Orthodox Member'}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-6 text-center text-xs text-ink-400">
+                  No matches found for "{query}"
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
-      {/* 3-column layout */}
-      <div className={`mx-auto flex gap-0 px-0 ${view === 'reels' ? 'max-w-none' : 'max-w-[1500px] lg:px-4 lg:py-4'}`}>
-        {/* Left sidebar */}
-        <div className={`hidden w-64 shrink-0 lg:block ${view === 'reels' ? 'lg:!hidden' : ''}`}>
-          <div className="sticky top-[4.5rem] h-[calc(100dvh-6rem)] card !rounded-2xl">
-            <ErrorBoundary name="Navigation" variant="section" resetKeys={[currentUserId]}>
-              <Suspense fallback={<FeedSkeleton />}>
-                <LeftSidebar />
-              </Suspense>
-            </ErrorBoundary>
-          </div>
-        </div>
-
-        {/* Middle content */}
-        <main className={`min-w-0 flex-1 ${view === 'reels' ? 'p-0' : 'px-3 py-4 sm:px-4 lg:px-4'}`}>
-          <div className={view === 'reels' || view === 'groups' ? 'mx-auto max-w-5xl' : 'mx-auto max-w-2xl'}>
-            <ErrorBoundary name="This page" variant="section" resetKeys={[view, groupRouteId, activeGroupId]}>
-              <Suspense fallback={<FeedSkeleton />}>
-                {view === 'feed' && (activeGroupId === null ? <FeedView /> : <FeedSkeleton />)}
-                {view === 'groups' && <GroupsView />}
-                {view === 'group' && <GroupFeedView />}
-                {view === 'reels' && <ReelsView />}
-                {view === 'network' && <NetworkView />}
-                {view === 'messenger' && <MessengerView />}
-                {view === 'calendar' && <CalendarView />}
-                {view === 'admin' && adminAccess && <AdminView />}
-                {view === 'profile' && <ProfileView />}
-              </Suspense>
-            </ErrorBoundary>
-          </div>
-        </main>
-
-        {/* Right sidebar */}
-        <div className={`hidden w-80 shrink-0 xl:block ${view === 'reels' ? 'xl:!hidden' : ''}`}>
-          <div className="sticky top-[4.5rem]">
-            <div className="card !rounded-2xl h-[calc(100vh-6rem)]">
-              <ErrorBoundary name="Community sidebar" variant="section" resetKeys={[currentUserId]}>
-                <Suspense fallback={<FeedSkeleton />}>
-                  <RightSidebar />
-                </Suspense>
-              </ErrorBoundary>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile left drawer */}
-      {leftOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setLeftOpen(false)} />
-          <div className="absolute left-0 top-0 h-full w-72 max-w-[85%] animate-slide-right border-r border-ink-700 bg-ink-900">
-            <ErrorBoundary name="Navigation" variant="section" resetKeys={[leftOpen]}>
-              <Suspense fallback={<FeedSkeleton />}>
-                <LeftSidebar onClose={() => setLeftOpen(false)} />
-              </Suspense>
-            </ErrorBoundary>
-          </div>
-        </div>
-      )}
-
-      {/* Mobile right drawer */}
-      {rightOpen && (
-        <div className="fixed inset-0 z-50 xl:hidden">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setRightOpen(false)} />
-          <div className="absolute right-0 top-0 h-full w-80 max-w-[90%] animate-slide-right border-l border-ink-700 bg-ink-900">
-            <ErrorBoundary name="Community sidebar" variant="section" resetKeys={[rightOpen]}>
-              <Suspense fallback={<FeedSkeleton />}>
-                <RightSidebar onClose={() => setRightOpen(false)} />
-              </Suspense>
-            </ErrorBoundary>
-          </div>
-        </div>
-      )}
-
-      {/* Global overlays — each chunk is fetched the first time it is opened */}
-      <ErrorBoundary name="Live video" fallback={null} resetKeys={[goLiveOpen, openStreamId]}>
-        <Suspense fallback={null}>
-          {goLiveOpen && <GoLiveModal />}
-          {openStreamId && <StreamViewer />}
-        </Suspense>
-      </ErrorBoundary>
-      <ErrorBoundary name="Sharing" fallback={null} resetKeys={[shareOpen]}>
-        <Suspense fallback={null}>{shareOpen && <ShareModal />}</Suspense>
-      </ErrorBoundary>
-      <ErrorBoundary name="Prayer meeting dialog" fallback={null}>
-        <Suspense fallback={null}><PrayerMeetingModal /></Suspense>
-      </ErrorBoundary>
-      <ErrorBoundary name="Install prompt" fallback={null}>
-        <Suspense fallback={null}><InstallPrompt /></Suspense>
-      </ErrorBoundary>
-      <ErrorBoundary name="Notification toasts" fallback={null} resetKeys={[currentUserId]}>
-        <Suspense fallback={null}><NotificationToasts /></Suspense>
-      </ErrorBoundary>
+      {/* Main App View Area */}
+      <main>{children}</main>
     </div>
   );
 }
