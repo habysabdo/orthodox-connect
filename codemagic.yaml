@@ -15,14 +15,14 @@ workflows:
       - name: Sync Capacitor Android
         script: |
           npx cap sync android
-      - name: Build Android APK
+      - name: Build Android App Bundle (AAB)
         script: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew bundleRelease
     artifacts:
-      - android/app/build/outputs/**/*.apk
       - android/app/build/outputs/**/*.aab
+      - android/app/build/outputs/**/*.apk
 
   ios-workflow:
     name: Capacitor iOS Build
