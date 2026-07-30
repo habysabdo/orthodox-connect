@@ -1,9 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Bell,
+  CalendarDays,
+  Clapperboard,
+  Compass,
+  Home,
   Menu,
+  MessageCircle,
+  Plus,
+  Radio,
   Search,
   Shield,
+  UserCircle,
   Users,
   Video,
   X,
@@ -39,6 +47,7 @@ export function AppShell() {
     setView,
     groupRouteId,
     goLiveOpen,
+    setGoLiveOpen,
     setPrayerMeetingOpen,
     prayerMeetingOpen,
     openStreamId,
@@ -49,17 +58,17 @@ export function AppShell() {
   const { t } = useI18n();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchActive, setSearchActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
   const me = users.find((u) => u?.id === currentUserId);
 
-  // Close search on click/tap outside
+  // Close search when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent | TouchEvent) {
       if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
-        setSearchOpen(false);
+        setSearchActive(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -81,155 +90,192 @@ export function AppShell() {
     : [];
 
   const handleSelectUser = (userId: string) => {
-    setSearchOpen(false);
+    setSearchActive(false);
     setSearchQuery('');
     setView('profile');
   };
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-ink-950 text-ink-100">
-      {/* Restored Full Top Navigation Bar */}
-      <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between border-b border-ink-700/60 bg-ink-900/80 px-3 backdrop-blur-md">
-        {/* Left: Hamburger Menu & Cross Logo */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="ghost-btn p-2 rounded-xl text-ink-300 hover:text-ink-100"
-            aria-label="Toggle Menu"
-          >
-            <Menu size={20} />
-          </button>
-          <button onClick={() => setView('feed')} className="flex items-center gap-2 focus:outline-none">
-            <Logo size={32} />
-          </button>
-        </div>
-
-        {/* Center: Expandable Facebook-Style Search */}
-        <div ref={searchContainerRef} className="relative flex-1 max-w-xs mx-2">
-          <div className="relative flex items-center">
-            <Search size={16} className="absolute left-3 text-ink-400 pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onFocus={() => setSearchOpen(true)}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setSearchOpen(true);
-              }}
-              placeholder="SEARCH..."
-              className="w-full rounded-full border border-ink-700 bg-ink-850 py-1.5 pl-8 pr-8 text-xs text-ink-100 placeholder-ink-400 outline-none focus:border-gold-400/70 focus:ring-1 focus:ring-gold-400/30"
-            />
-            {searchQuery ? (
+      {/* --------------------------------------------------
+         FACEBOOK-STYLE DUAL-ROW MOBILE HEADER
+      -------------------------------------------------- */}
+      <header className="sticky top-0 z-40 flex flex-col border-b border-ink-700/60 bg-ink-900/90 backdrop-blur-md">
+        
+        {/* ROW 1: Logo & Quick Action Buttons */}
+        <div className="flex h-14 items-center justify-between px-3">
+          {searchActive ? (
+            /* Full-width Search Mode (Facebook Style) */
+            <div ref={searchContainerRef} className="relative flex w-full items-center gap-2">
+              <div className="relative flex flex-1 items-center">
+                <Search size={18} className="absolute left-3 text-ink-400 pointer-events-none" />
+                <input
+                  type="text"
+                  autoFocus
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search people, churches, groups..."
+                  className="w-full rounded-full border border-ink-700 bg-ink-850 py-2 pl-9 pr-8 text-sm text-ink-100 placeholder-ink-400 outline-none focus:border-gold-400/70"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 text-ink-400 hover:text-ink-100"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
               <button
-                type="button"
                 onClick={() => {
+                  setSearchActive(false);
                   setSearchQuery('');
-                  setSearchOpen(false);
                 }}
-                className="absolute right-2.5 rounded-full p-0.5 text-ink-400 hover:text-ink-100"
+                className="px-2 text-xs font-semibold text-gold-400"
               >
-                <X size={14} />
+                Cancel
               </button>
-            ) : null}
-          </div>
 
-          {/* Search Dropdown Overlay */}
-          {searchOpen && trimmed.length > 0 && (
-            <div className="absolute left-0 right-0 top-full mt-2 max-h-80 overflow-y-auto rounded-2xl border border-ink-700 bg-ink-850 p-2 shadow-2xl z-50">
-              {matchingUsers.length > 0 ? (
-                <div className="space-y-1">
-                  <div className="px-3 py-1 text-[10px] font-bold uppercase text-gold-400">
-                    People & Parishes
-                  </div>
-                  {matchingUsers.map((u) => (
-                    <button
-                      key={u.id}
-                      onClick={() => handleSelectUser(u.id)}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-ink-750"
-                    >
-                      <Avatar src={u.photo} name={u.name} size={32} ring="gold" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs font-semibold text-ink-100">{u.name}</div>
-                        <div className="truncate text-[11px] text-ink-400">{u.parish || 'Orthodox Member'}</div>
+              {/* Full-width Floating Dropdown Results */}
+              {trimmed.length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-2 max-h-80 overflow-y-auto rounded-2xl border border-ink-700 bg-ink-850 p-2 shadow-2xl z-50">
+                  {matchingUsers.length > 0 ? (
+                    <div className="space-y-1">
+                      <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-gold-400">
+                        People & Parishes
                       </div>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-4 text-center text-xs text-ink-400">
-                  No results for "{searchQuery}"
+                      {matchingUsers.map((u) => (
+                        <button
+                          key={u.id}
+                          onClick={() => handleSelectUser(u.id)}
+                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-ink-750"
+                        >
+                          <Avatar src={u.photo} name={u.name} size={36} ring="gold" />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-semibold text-ink-100">{u.name}</div>
+                            <div className="truncate text-xs text-ink-400">{u.parish || 'Orthodox Member'}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-4 text-center text-xs text-ink-400">
+                      No matches found for "{searchQuery}"
+                    </div>
+                  )}
                 </div>
               )}
             </div>
+          ) : (
+            /* Standard Header Row */
+            <>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                  className="p-1.5 text-ink-300 hover:text-ink-100 lg:hidden"
+                >
+                  <Menu size={22} />
+                </button>
+                <Logo size={28} withText />
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setGoLiveOpen(true)}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-ink-850 text-ink-300 hover:text-gold-300"
+                  title="Go Live"
+                >
+                  <Plus size={20} />
+                </button>
+                <button
+                  onClick={() => setSearchActive(true)}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-ink-850 text-ink-300 hover:text-gold-300"
+                  title="Search"
+                >
+                  <Search size={20} />
+                </button>
+                <button
+                  onClick={() => setView('messenger')}
+                  className="relative flex h-9 w-9 items-center justify-center rounded-full bg-ink-850 text-ink-300 hover:text-gold-300"
+                  title="Messenger"
+                >
+                  <MessageCircle size={20} />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </>
           )}
         </div>
 
-        {/* Right Actions: Video, Friends, Notifications, Admin Shield, Avatar */}
-        <div className="flex items-center gap-1.5">
-          {/* Video Call Icon */}
-          <button
-            onClick={() => setPrayerMeetingOpen(true)}
-            className="rounded-full p-2 text-ink-300 hover:bg-ink-800 hover:text-gold-200 transition-colors"
-            title="Start Video Meeting"
-          >
-            <Video size={19} />
-          </button>
-
-          {/* Friends / Groups Icon */}
-          <button
-            onClick={() => setView('groups')}
-            className="rounded-full p-2 text-ink-300 hover:bg-ink-800 hover:text-gold-200 transition-colors"
-            title="Groups & Friends"
-          >
-            <Users size={19} />
-          </button>
-
-          {/* Bell Notification Badge */}
-          <button
-            onClick={() => setView('messenger')}
-            className="relative rounded-full p-2 text-ink-300 hover:bg-ink-800 hover:text-gold-200 transition-colors"
-            title="Notifications"
-          >
-            <Bell size={19} />
-            {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white shadow-sm">
-                {unreadCount}
-              </span>
-            )}
-          </button>
-
-          {/* Admin Shield (if user is admin) */}
-          {me && hasAdminAccess(me) && (
+        {/* ROW 2: Facebook-Style Navigation Tabs */}
+        {!searchActive && (
+          <nav className="flex h-12 w-full items-center justify-around border-t border-ink-700/40 px-1">
             <button
-              onClick={() => setView('admin')}
-              className="relative rounded-full p-2 text-ink-300 hover:bg-ink-800 hover:text-gold-200 transition-colors"
-              title="Admin Dashboard"
+              onClick={() => setView('feed')}
+              className={`flex flex-1 items-center justify-center py-2.5 border-b-2 transition-colors ${
+                view === 'feed' ? 'border-gold-400 text-gold-300' : 'border-transparent text-ink-400 hover:text-ink-100'
+              }`}
             >
-              <Shield size={19} />
-              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-gold-400" />
+              <Home size={22} />
             </button>
-          )}
-
-          {/* Profile Avatar Button */}
-          {me && (
+            <button
+              onClick={() => setView('reels')}
+              className={`flex flex-1 items-center justify-center py-2.5 border-b-2 transition-colors ${
+                view === 'reels' ? 'border-gold-400 text-gold-300' : 'border-transparent text-ink-400 hover:text-ink-100'
+              }`}
+            >
+              <Clapperboard size={22} />
+            </button>
+            <button
+              onClick={() => setView('groups')}
+              className={`flex flex-1 items-center justify-center py-2.5 border-b-2 transition-colors ${
+                view === 'groups' ? 'border-gold-400 text-gold-300' : 'border-transparent text-ink-400 hover:text-ink-100'
+              }`}
+            >
+              <Users size={22} />
+            </button>
+            <button
+              onClick={() => setView('calendar')}
+              className={`flex flex-1 items-center justify-center py-2.5 border-b-2 transition-colors ${
+                view === 'calendar' ? 'border-gold-400 text-gold-300' : 'border-transparent text-ink-400 hover:text-ink-100'
+              }`}
+            >
+              <CalendarDays size={22} />
+            </button>
+            {me && hasAdminAccess(me) && (
+              <button
+                onClick={() => setView('admin')}
+                className={`flex flex-1 items-center justify-center py-2.5 border-b-2 transition-colors ${
+                  view === 'admin' ? 'border-gold-400 text-gold-300' : 'border-transparent text-ink-400 hover:text-ink-100'
+                }`}
+              >
+                <Shield size={22} />
+              </button>
+            )}
             <button
               onClick={() => setView('profile')}
-              className="ml-1 transition-transform active:scale-95"
+              className={`flex flex-1 items-center justify-center py-1.5 border-b-2 transition-colors ${
+                view === 'profile' ? 'border-gold-400' : 'border-transparent'
+              }`}
             >
-              <Avatar src={me.photo} name={me.name} size={34} ring="gold" />
+              {me ? <Avatar src={me.photo} name={me.name} size={26} ring={view === 'profile' ? 'gold' : 'none'} /> : <UserCircle size={22} />}
             </button>
-          )}
-        </div>
+          </nav>
+        )}
       </header>
 
-      {/* Main Layout Area */}
+      {/* Main Workspace Area */}
       <div className="flex flex-1 min-h-0 w-full overflow-hidden">
-        {/* Left Sidebar */}
+        {/* Desktop Left Sidebar */}
         <div className="hidden lg:block w-72 shrink-0 border-r border-ink-700/60 bg-ink-900/40">
           <LeftSidebar />
         </div>
 
-        {/* Mobile Slideout Navigation */}
+        {/* Mobile Slideout Menu */}
         {mobileMenuOpen && (
           <div className="fixed inset-0 z-50 flex lg:hidden">
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
@@ -239,7 +285,7 @@ export function AppShell() {
           </div>
         )}
 
-        {/* Center Main Views */}
+        {/* Center Main Content View */}
         <main className="flex-1 min-w-0 overflow-y-auto">
           {view === 'feed' && <FeedView />}
           {view === 'reels' && <ReelsView />}
@@ -250,13 +296,13 @@ export function AppShell() {
           {view === 'admin' && me && hasAdminAccess(me) && <AdminView />}
         </main>
 
-        {/* Right Sidebar */}
+        {/* Desktop Right Sidebar */}
         <div className="hidden xl:block w-80 shrink-0 border-l border-ink-700/60 bg-ink-900/40">
           <RightSidebar />
         </div>
       </div>
 
-      {/* Modals & Overlays */}
+      {/* Modals */}
       {goLiveOpen && <GoLiveModal />}
       {shareOpen && <ShareModal />}
       {likesModalPost && <LikesModal />}
