@@ -1,23 +1,16 @@
 import {
-  CalendarDays,
-  Clapperboard,
-  Compass,
-  Home,
   LogOut,
   Radio,
-  Shield,
-  Sun,
-  MessageCircle,
-  Moon,
-  Scroll,
-  UserCircle,
   Share2,
   Video,
   X,
+  Sun,
+  Moon,
+  Scroll,
 } from 'lucide-react';
 import { Avatar, Logo } from './ui';
-import { useStore, unreadCountFor } from '@/store/context';
-import { useUI, type ViewKey } from '@/store/ui';
+import { useStore } from '@/store/context';
+import { useUI } from '@/store/ui';
 import { useI18n } from '@/i18n';
 import { hasAdminAccess } from '@/utils/users';
 import { userName } from '@/utils/postSafety';
@@ -27,31 +20,18 @@ import { LanguageSwitcher } from './LanguageSwitcher';
 export function LeftSidebar({ onClose }: { onClose?: () => void }) {
   const state = useStore();
   const { users, currentUserId, signOut } = state;
-  const { view, setView, setGoLiveOpen, setShareOpen, setPrayerMeetingOpen } = useUI();
+  const { setView, setGoLiveOpen, setShareOpen, setPrayerMeetingOpen } = useUI();
   const { t } = useI18n();
   const { theme, toggleTheme } = useTheme();
+
   const me = users.find((u) => u?.id === currentUserId);
   if (!me) return null;
 
-  const unread = unreadCountFor(state, me.id);
   const openShare = () => {
     onClose?.();
     setShareOpen(true);
   };
 
-  const nav: { key: ViewKey; label: string; icon: React.ReactNode; badge?: number; href?: string }[] = [
-    { key: 'feed', label: t('nav.feed'), icon: <Home size={20} /> },
-    { key: 'reels', label: t('nav.reels'), icon: <Clapperboard size={20} /> },
-    { key: 'messenger', label: t('nav.messages'), icon: <MessageCircle size={20} />, badge: unread || undefined },
-    { key: 'calendar', label: t('nav.calendar'), icon: <CalendarDays size={20} /> },
-    { key: 'groups', label: t('nav.groups'), icon: <Compass size={20} /> },
-    { key: 'profile', label: t('nav.profile'), icon: <UserCircle size={20} /> },
-    ...(hasAdminAccess(me)
-      ? [{ key: 'admin' as ViewKey, label: t('nav.admin'), icon: <Shield size={20} />, href: '/admin' }]
-      : []),
-  ];
-
-  // Dynamic Theme Label & Icon Helpers
   const getThemeDetails = () => {
     if (theme === 'light') {
       return { label: 'Light Mode', icon: <Sun size={20} />, next: 'Dark Mode' };
@@ -66,6 +46,7 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
 
   return (
     <aside className="flex h-full min-h-0 w-full flex-col gap-4 overflow-hidden p-4">
+      {/* Header */}
       <div className="flex items-center justify-between px-2 pt-1">
         <Logo size={34} withText />
         {onClose && (
@@ -76,9 +57,12 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
       </div>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pe-1">
-        {/* Go Live CTA */}
+        {/* Quick Broadcast Actions */}
         <button
-          onClick={() => setGoLiveOpen(true)}
+          onClick={() => {
+            onClose?.();
+            setGoLiveOpen(true);
+          }}
           className="group relative flex w-full items-center gap-3 overflow-hidden rounded-2xl border border-gold-400/40 bg-gradient-to-br from-gold-500/15 to-transparent px-4 py-3 text-left transition-all hover:border-gold-400/70 hover:from-gold-500/25"
         >
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-400/20 text-gold-200 group-hover:bg-gold-400/30">
@@ -94,7 +78,6 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
           </span>
         </button>
 
-        {/* Prayer meeting CTA */}
         <button
           onClick={() => {
             onClose?.();
@@ -111,62 +94,9 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
           </div>
         </button>
 
-        {/* Nav */}
-        <nav className="flex flex-col gap-1">
-          {nav.map((item) => {
-            const active = view === item.key;
-            const className = `group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
-              active
-                ? 'bg-gold-400/10 text-gold-200 shadow-[inset_0_0_0_1px_rgba(212,175,55,0.3)]'
-                : 'text-ink-300 hover:bg-ink-800 hover:text-ink-100'
-            }`;
-            const content = (
-              <>
-                <span className={active ? 'text-gold-300' : 'text-ink-400 group-hover:text-gold-300'}>
-                  {item.icon}
-                </span>
-                <span className="flex-1 text-left">{item.label}</span>
-                {item.badge ? (
-                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gold-400 px-1.5 text-[11px] font-bold text-[#17130a]">
-                    {item.badge}
-                  </span>
-                ) : null}
-                {active && <span className="h-1.5 w-1.5 rounded-full bg-gold-300" />}
-              </>
-            );
-
-            if (item.href) {
-              return (
-                <a
-                  key={item.key}
-                  href={item.href}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    setView(item.key);
-                    onClose?.();
-                  }}
-                  className={className}
-                >
-                  {content}
-                </a>
-              );
-            }
-
-            return (
-              <button
-                key={item.key}
-                onClick={() => {
-                  setView(item.key);
-                  onClose?.();
-                }}
-                className={className}
-              >
-                {content}
-              </button>
-            );
-          })}
-
-          {/* Invite / share */}
+        {/* Menu Utilities (Non-duplicated items) */}
+        <nav className="flex flex-col gap-1 pt-2">
+          {/* Invite Friends */}
           <button
             onClick={openShare}
             className="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-ink-300 transition-all hover:bg-ink-800 hover:text-ink-100"
@@ -177,9 +107,10 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
             <span className="flex-1 text-left">{t('share.invite')}</span>
           </button>
 
+          {/* Language Switcher */}
           <LanguageSwitcher variant="sidebar" />
 
-          {/* 3-Way Dynamic Theme Toggle Button */}
+          {/* Theme Toggle */}
           <button
             type="button"
             onClick={toggleTheme}
@@ -194,10 +125,13 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
         </nav>
       </div>
 
-      <div className="shrink-0 space-y-2">
-        {/* Me card */}
+      {/* Footer Profile & Sign Out */}
+      <div className="shrink-0 space-y-2 pt-2 border-t border-ink-700/60">
         <button
-          onClick={() => setView('profile')}
+          onClick={() => {
+            onClose?.();
+            setView('profile');
+          }}
           className="flex w-full items-center gap-3 rounded-2xl border border-ink-700 bg-ink-850/60 p-3 text-left transition-colors hover:border-gold-400/40"
         >
           <Avatar src={me.photo} name={me.name} size={40} online ring="gold" />
