@@ -4,6 +4,7 @@ import type {
   ChatAttachment,
   ChatMessage,
   CommunityAlert,
+  Friendship,
   Group,
   LiveStream,
   Post,
@@ -18,6 +19,7 @@ export interface AppState {
   authChecked: boolean;
   groups: Group[];
   activeGroupId: string | null;
+  friendships: Friendship[];
   posts: Post[];
   postsCache: Record<string, Post[]>;
   postsHasMoreCache: Record<string, boolean>;
@@ -56,6 +58,9 @@ export interface AppActions {
   // Instagram-style Follow System
   followUser: (targetUserId: string) => Promise<void>;
   unfollowUser: (targetUserId: string) => Promise<void>;
+  addFriend: (otherId: string) => Promise<void>;
+  acceptFriend: (otherId: string) => Promise<void>;
+  removeFriend: (otherId: string) => Promise<void>;
 
   // chat
   sendMessage: (threadId: string, text: string, attachments?: ChatAttachment[]) => void;
@@ -122,6 +127,23 @@ export function followingOf(state: AppState, userId: string): User[] {
   if (!user?.following) return [];
   const followingSet = new Set(user.following);
   return state.users.filter((u) => u && followingSet.has(u.id));
+}
+
+export function friendshipBetween(state: AppState, a: string, b: string): Friendship | undefined {
+  return state.friendships.find(
+    (friendship) =>
+      (friendship.a === a && friendship.b === b) ||
+      (friendship.a === b && friendship.b === a),
+  );
+}
+
+export function friendsOf(state: AppState, userId: string): User[] {
+  const friendIds = new Set(
+    state.friendships
+      .filter((friendship) => friendship.status === 'accepted' && (friendship.a === userId || friendship.b === userId))
+      .map((friendship) => (friendship.a === userId ? friendship.b : friendship.a)),
+  );
+  return state.users.filter((user) => friendIds.has(user.id));
 }
 
 export function threadForUsers(state: AppState, a: string, b: string): Thread | undefined {
