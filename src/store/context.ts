@@ -4,7 +4,6 @@ import type {
   ChatAttachment,
   ChatMessage,
   CommunityAlert,
-  Friendship,
   Group,
   LiveStream,
   Post,
@@ -15,28 +14,18 @@ import type {
 export interface AppState {
   users: User[];
   currentUserId: string | null;
-  // Whether the initial Identity session restore has completed. Starts false so
-  // the app can show a loading state instead of flashing the logged-out landing
-  // page while getUser() resolves (noticeably slower on mobile).
+  // Whether the initial Identity session restore has completed.
   authChecked: boolean;
   groups: Group[];
   activeGroupId: string | null;
   posts: Post[];
-  // Feed posts fetched per space, keyed by `groupCacheKey`. Revisiting a space
-  // renders its cached posts instantly while a background refresh runs, so
-  // switching spaces never blanks the feed or refetches from scratch.
   postsCache: Record<string, Post[]>;
   postsHasMoreCache: Record<string, boolean>;
-  // True while the active space's feed is being fetched with no cached copy to
-  // show in the meantime — drives the feed loading skeleton.
   postsLoading: boolean;
   postsLoadingMore: boolean;
   postsHasMore: boolean;
-  // True until the community roster and groups have been loaded once, so the
-  // network and spaces UIs can show skeletons instead of a misleading "empty".
   usersLoading: boolean;
   groupsLoading: boolean;
-  friendships: Friendship[];
   threads: Thread[];
   streams: LiveStream[];
   events: CalendarEvent[];
@@ -44,7 +33,7 @@ export interface AppState {
 }
 
 export interface AppActions {
-  // auth
+  // auth & onboarding
   completeOnboarding: (data: { name: string; age: number; photo: string; parish: string; bio?: string }) => Promise<void>;
   signOut: () => void;
   createGroup: (name: string, description: string) => Promise<Group>;
@@ -64,10 +53,9 @@ export interface AppActions {
   unflagPost: (postId: string) => void;
   deletePost: (postId: string) => void;
 
-  // friendships
-  addFriend: (otherId: string) => Promise<void>;
-  acceptFriend: (otherId: string) => Promise<void>;
-  removeFriend: (otherId: string) => Promise<void>;
+  // Instagram-style Follow System
+  followUser: (targetUserId: string) => Promise<void>;
+  unfollowUser: (targetUserId: string) => Promise<void>;
 
   // chat
   sendMessage: (threadId: string, text: string, attachments?: ChatAttachment[]) => void;
@@ -99,7 +87,7 @@ export function useStore(): Store {
   return ctx;
 }
 
-// ----- selectors / helpers (pure) -----
+// ----- Selectors & Helpers -----
 
 export const uid = (prefix = 'id') =>
   `${prefix}_${Math.random().toString(36).slice(2, 9)}${Date.now().toString(36).slice(-4)}`;
@@ -107,8 +95,6 @@ export const uid = (prefix = 'id') =>
 export const threadIdFor = (a: string, b: string) =>
   [a, b].sort().join('__');
 
-// Stable cache key for a space's feed. The public feed has no group id, so it
-// is keyed under a reserved 'public' bucket alongside each group's own id.
 export const groupCacheKey = (groupId: string | null | undefined) => groupId ?? 'public';
 
 export function getUser(state: AppState, id: string | null | undefined): User | undefined {
@@ -116,19 +102,26 @@ export function getUser(state: AppState, id: string | null | undefined): User | 
   return state.users.find((u) => u?.id === id);
 }
 
-export function friendsOf(state: AppState, userId: string): User[] {
-  const friendIds = new Set(
-    state.friendships
-      .filter((f) => f?.status === 'accepted' && (f.a === userId || f.b === userId))
-      .map((f) => (f.a === userId ? f.b : f.a)),
-  );
-  return state.users.filter((user) => user && friendIds.has(user.id));
+// Helper: Check if User A follows User B
+export function isFollowing(state: AppState, currentUserId: string, targetUserId: string): boolean {
+  const target = getUser(state, targetUserId);
+  return Boolean(target?.followers?.includes(currentUserId));
 }
 
-export function friendshipBetween(state: AppState, a: string, b: string): Friendship | undefined {
-  return state.friendships.find(
-    (f) => f && ((f.a === a && f.b === b) || (f.a === b && f.b === a)),
-  );
+// Helper: Get array of Users who follow this user
+export function followersOf(state: AppState, userId: string): User[] {
+  const user = getUser(state, userId);
+  if (!user?.followers) return [];
+  const followerSet = new Set(user.followers);
+  return state.users.filter((u) => u && followerSet.has(u.id));
+}
+
+// Helper: Get array of Users this user is following
+export function followingOf(state: AppState, userId: string): User[] {
+  const user = getUser(state, userId);
+  if (!user?.following) return [];
+  const followingSet = new Set(user.following);
+  return state.users.filter((u) => u && followingSet.has(u.id));
 }
 
 export function threadForUsers(state: AppState, a: string, b: string): Thread | undefined {
@@ -136,8 +129,6 @@ export function threadForUsers(state: AppState, a: string, b: string): Thread | 
   return state.threads.find((t) => t?.id === id);
 }
 
-// A thread can arrive from a cached payload without its `messages` or
-// `participantIds` array, so both are treated as possibly absent here.
 export function unreadCountFor(state: AppState, userId: string): number {
   return state.threads.reduce((sum, t) => {
     if (!t?.participantIds?.includes(userId)) return sum;
