@@ -1,0 +1,39 @@
+workflows:
+  android-workflow:
+    name: Capacitor Android Build
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm install
+      - name: Build web code
+        script: |
+          npm run build
+      - name: Sync Capacitor Android
+        script: |
+          npx cap sync android
+      - name: Build Android APK
+        script: |
+          cd android
+          ./gradlew assembleRelease
+    artifacts:
+      - android/app/build/outputs/**/*.apk
+      - android/app/build/outputs/**/*.aab
+
+  ios-workflow:
+    name: Capacitor iOS Build
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm install
+      - name: Build web code
+        script: |
+          npm run build
+      - name: Sync Capacitor iOS
+        script: |
+          npx cap sync ios
+    artifacts:
+      - ios/App/build/Release-iphoneos/*.app
