@@ -180,3 +180,18 @@ html.theme-transition * {
     box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.55), 0 0 0 4px rgb(var(--ink-850) / 0.9);
   }
 }
+
+/* --------------------------------------------------
+   REEL HEART DOUBLE-TAP ANIMATION FIX
+-------------------------------------------------- */
+@keyframes reel-heart-burst {
+  0% { opacity: 0; transform: scale(0.35) rotate(-8deg); }
+  30% { opacity: 1; transform: scale(1.12) rotate(3deg); }
+  58% { opacity: 1; transform: scale(0.96) rotate(0deg); }
+  100% { opacity: 0; transform: scale(1.38) rotate(0deg); }
+}
+
+.reel-heart-burst {
+  animation: reel-heart-burst 650ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
+  pointer-events: none;
+}
