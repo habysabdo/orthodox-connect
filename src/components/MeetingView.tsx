@@ -110,19 +110,28 @@ export function MeetingView() {
           }}
           configOverwrite={{
             // Members are already signed in to OrthodoxConnect, so the prejoin
-            // screen and the lobby only add a "Waiting for moderator" wall
-            // between them and the prayer room. `prejoinConfig` is the current
-            // key; `prejoinPageEnabled` is kept for older Jitsi deployments.
+            // screen and the lobby only add a "Asking to join meeting / Log-in
+            // to become a moderator" wall between them and the prayer room.
+            // `prejoinConfig` is the current key; `prejoinPageEnabled` is kept
+            // for older Jitsi deployments.
             prejoinPageEnabled: false,
             prejoinConfig: { enabled: false },
             disableDeepLinking: true,
             startWithAudioMuted: false,
             startWithVideoMuted: false,
+            // The lobby is off entirely, so nobody is held on a knock screen
+            // waiting to be admitted. With no lobby there is nothing to knock
+            // at, which is why auto-knocking is off too.
+            enableLobby: false,
+            autoKnockLobby: false,
             enableLobbyChat: false,
-            // When a deployment does put a room behind a lobby, knock straight
-            // away instead of parking the member on a button.
-            lobby: { autoKnock: true, enableChat: false },
-            disableModeratorIndicator: false,
+            lobby: { autoKnock: false, enableChat: false },
+            hideLobbyButton: true,
+            // Everyone joins as an ordinary participant: no token roles, no
+            // moderator log-in prompt, and no display-name gate on the way in.
+            enableUserRolesBasedOnToken: false,
+            requireDisplayName: false,
+            disableModeratorIndicator: true,
             toolbarButtons: TOOLBAR_BUTTONS,
           }}
           interfaceConfigOverwrite={{
@@ -131,6 +140,9 @@ export function MeetingView() {
             SHOW_WATERMARK_FOR_GUESTS: false,
             DEFAULT_BACKGROUND: '#090d12',
             MOBILE_APP_PROMO: false,
+            // Older deployments read this flag when deciding whether to offer
+            // the "Log-in to become a moderator" dialog.
+            AUTHENTICATION_ENABLE: false,
           }}
           spinner={MeetingSpinner}
           onApiReady={(api) => {

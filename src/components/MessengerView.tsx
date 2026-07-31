@@ -28,6 +28,7 @@ import { clockTime, timeAgo } from '@/utils/format';
 import { firstName, userName, userPhoto } from '@/utils/postSafety';
 import { uploadChatAttachment } from '@/utils/chatMedia';
 import { createMeetingId, decodeChatInvite, encodeChatInvite } from '@/utils/meetings';
+import { publishIncomingCall } from '@/utils/callSignaling';
 
 interface PendingFile {
   id: string;
@@ -371,9 +372,27 @@ export function MessengerView() {
     if (!activeThread || uploading || recording) return;
     const roomId = createMeetingId();
     const title = me ? `Video call with ${me.name}` : 'Video call';
-    state.sendMessage(activeThread.id, encodeChatInvite({ roomId, title, hostId: me?.id, startedAt: Date.now() }));
+    const startedAt = Date.now();
+    state.sendMessage(activeThread.id, encodeChatInvite({ roomId, title, hostId: me?.id, startedAt }));
+    // The chat invite is the durable record of the call, but it is only seen by
+    // someone already looking at this thread. Ringing the other member in real
+    // time is what actually reaches them, wherever they are in the app.
+    if (activeFriend) {
+      publishIncomingCall(activeFriend.id, {
+        roomId,
+        title,
+        callerId: me.id,
+        callerName: me.name,
+        callerPhoto: me.photo,
+        threadId: activeThread.id,
+        startedAt,
+      });
+    }
     openMeeting(roomId, title);
   };
+
+  /** Join a call already invited to in this thread — the same room, not a new one. */
+  const joinCall = (roomId: string, title: string) => openMeeting(roomId, title);
 
   const openConversation = (threadId: string, friendId: string) => {
     if (!state.threads.some((thread) => thread.id === threadId)) setOpenThreadId(state.openThreadWith(friendId));
@@ -471,7 +490,7 @@ export function MessengerView() {
                             </div>
                           </div>
                           <button
-                            onClick={startVideoCall}
+                            onClick={() => joinCall(invite.roomId, invite.title)}
                             className="w-full rounded-xl bg-white dark:bg-gray-700 py-2 text-center text-sm font-semibold text-black dark:text-white shadow-sm transition hover:bg-gray-50"
                           >
                             Join call
