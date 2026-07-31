@@ -10,24 +10,27 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('app-theme') as Theme;
-    return saved || 'light';
+  const [theme, setThemeState] = useState<Theme>(() => {
+    const saved = localStorage.getItem('theme') as Theme;
+    return (saved === 'light' || saved === 'dark' || saved === 'ancient') ? saved : 'light';
   });
 
-  useEffect(() => {
-    // Sets <html data-theme="ancient"> on the root element
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('app-theme', theme);
-  }, [theme]);
+  const setTheme = (newTheme: Theme) => {
+    setThemeState(newTheme);
+  };
 
   const toggleTheme = () => {
-    setTheme((prev) => {
+    setThemeState((prev) => {
       if (prev === 'light') return 'dark';
       if (prev === 'dark') return 'ancient';
       return 'light';
     });
   };
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
