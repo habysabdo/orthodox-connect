@@ -1,4 +1,4 @@
-import './polyfills';
+// import './polyfills'; <-- Comment this out for now to test the web build
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
