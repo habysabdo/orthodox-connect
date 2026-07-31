@@ -37,6 +37,10 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
     onClose?.();
     setShareOpen(true);
   };
+  const handleLogout = () => {
+    onClose?.();
+    signOut();
+  };
 
   const nav: { key: ViewKey; label: string; icon: React.ReactNode; badge?: number; href?: string }[] = [
     { key: 'feed', label: t('nav.feed'), icon: <Home size={20} /> },
@@ -51,7 +55,7 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
   ];
 
   return (
-    <aside className="flex h-full w-full flex-col gap-4 p-4">
+    <aside className="flex h-full w-full flex-col gap-4 overflow-y-auto p-4">
       <div className="flex items-center justify-between px-2 pt-1">
         <Logo size={34} withText />
         {onClose && (
@@ -194,10 +198,12 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
       </button>
 
       <button
-        onClick={signOut}
-        className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-ink-400 transition-colors hover:bg-ink-800 hover:text-red-300"
+        type="button"
+        onClick={handleLogout}
+        className="group flex w-full items-center justify-center gap-2 rounded-xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-200 shadow-[0_10px_30px_rgba(239,68,68,0.08)] transition-all hover:border-red-300/70 hover:bg-red-500/20 hover:text-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/70"
+        aria-label={t('common.signOut')}
       >
-        <LogOut size={16} />
+        <LogOut size={18} className="transition-transform group-hover:translate-x-0.5" />
         {t('common.signOut')}
       </button>
     </aside>
