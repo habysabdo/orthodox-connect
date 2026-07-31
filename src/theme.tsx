@@ -1,59 +1,45 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { ThemeContext, type Theme } from './theme-context';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { Theme } from './types';
 
-const STORAGE_KEY = 'orthodoxconnect-theme';
-const THEME_COLORS: Record<Theme, string> = {
-  light: '#f7f3eb',
-  dark: '#0a0c12',
-};
-
-function applyTheme(theme: Theme) {
-  const root = document.documentElement;
-  root.classList.toggle('dark', theme === 'dark');
-  root.dataset.theme = theme;
-  root.style.colorScheme = theme;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_COLORS[theme]);
+interface ThemeContextType {
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
+  toggleTheme: () => void;
 }
 
-function initialTheme(): Theme {
-  return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
-}
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(initialTheme);
+export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem('app-theme') as Theme;
+    return saved || 'light';
+  });
 
   useEffect(() => {
-    applyTheme(theme);
+    // Sets <html data-theme="ancient"> on the root element
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('app-theme', theme);
   }, [theme]);
 
-  useEffect(() => {
-    let storedTheme: string | null = null;
-    try {
-      storedTheme = localStorage.getItem(STORAGE_KEY);
-    } catch {
-      return;
-    }
-
-    if (storedTheme === 'light' || storedTheme === 'dark') return;
-
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleSystemTheme = (event: MediaQueryListEvent) => setTheme(event.matches ? 'dark' : 'light');
-    mediaQuery.addEventListener('change', handleSystemTheme);
-    return () => mediaQuery.removeEventListener('change', handleSystemTheme);
-  }, []);
-
   const toggleTheme = () => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark';
-    const root = document.documentElement;
-    root.classList.add('theme-transition');
-    setTheme(nextTheme);
-    try {
-      localStorage.setItem(STORAGE_KEY, nextTheme);
-    } catch {
-      root.dataset.themeStorage = 'session';
-    }
-    window.setTimeout(() => root.classList.remove('theme-transition'), 320);
+    setTheme((prev) => {
+      if (prev === 'light') return 'dark';
+      if (prev === 'dark') return 'ancient';
+      return 'light';
+    });
   };
 
-  return <ThemeContext.Provider value={{ theme, toggleTheme }}>{children}</ThemeContext.Provider>;
-}
+  return (
+    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+};
+
+export const useTheme = () => {
+  const context = useContext(ThemeContext);
+  if (!context) {
+    throw new Error('useTheme must be used within a ThemeProvider');
+  }
+  return context;
+};
