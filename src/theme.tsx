@@ -1,4 +1,3 @@
-// src/theme.tsx
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Theme } from './types';
 
@@ -36,12 +35,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     const root = document.documentElement;
-    
-    // Clean up active classes/attributes
     root.classList.remove('dark', 'ancient');
     root.removeAttribute('data-theme');
 
-    // Apply active theme
     if (theme === 'dark') {
       root.classList.add('dark');
       root.setAttribute('data-theme', 'dark');
@@ -59,11 +55,16 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [theme]);
 
-  const isDark = theme === 'dark';
-  const isAncient = theme === 'ancient';
-
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme, isDark, isAncient }}>
+    <ThemeContext.Provider 
+      value={{ 
+        theme, 
+        setTheme, 
+        toggleTheme, 
+        isDark: theme === 'dark', 
+        isAncient: theme === 'ancient' 
+      }}
+    >
       {children}
     </ThemeContext.Provider>
   );
@@ -72,7 +73,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 export const useTheme = () => {
   const context = useContext(ThemeContext);
   if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider');
+    // Return a fallback object instead of throwing an unhandled exception
+    return {
+      theme: 'light' as Theme,
+      setTheme: () => {},
+      toggleTheme: () => {},
+      isDark: false,
+      isAncient: false,
+    };
   }
   return context;
 };
