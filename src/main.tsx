@@ -3,7 +3,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
-import { ThemeProvider } from './theme.tsx';
+import { ThemeProvider } from './theme-context';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { resetAutomaticReloadGuard } from './utils/appRecovery';
 

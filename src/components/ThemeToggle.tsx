@@ -1,9 +1,9 @@
-import { Moon, Sun } from 'lucide-react';
-import { useTheme } from '../theme-context';
+import { Moon, ScrollText, Sun } from 'lucide-react';
+import { getNextTheme, useTheme } from '../theme-context';
 
 export function ThemeToggle({ className = '' }: { className?: string }) {
   const { theme, toggleTheme } = useTheme();
-  const nextTheme = theme === 'dark' ? 'light' : 'dark';
+  const nextTheme = getNextTheme(theme);
 
   return (
     <button
@@ -21,6 +21,11 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
       <Moon
         size={17}
         className={`absolute transition-all duration-300 ${theme === 'dark' ? 'rotate-0 scale-100 opacity-100' : 'rotate-90 scale-50 opacity-0'}`}
+        aria-hidden="true"
+      />
+      <ScrollText
+        size={17}
+        className={`absolute transition-all duration-300 ${theme === 'ancient' ? 'rotate-0 scale-100 opacity-100' : 'rotate-90 scale-50 opacity-0'}`}
         aria-hidden="true"
       />
     </button>
