@@ -5,6 +5,7 @@ import { fileURLToPath, URL } from 'node:url';
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: './', // <--- ADD THIS LINE HERE
   plugins: [
     react(),
     legacy({
