@@ -49,19 +49,22 @@ const GOOGLE_PHOTOS = [
   'https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg',
 ];
 
+// Wrapped in try/catch to ensure API fetch errors fail gracefully without crashing React
 async function loadSessionUser(): Promise<User | null> {
-  const response = await fetch(apiUrl(`/api/session?refresh=${Date.now()}`), { cache: 'no-store' });
-  if (response.status === 401 || response.status === 403) return null;
-  if (!response.ok) throw new Error('Failed to load the signed-in account');
-  return response.json();
+  try {
+    const response = await fetch(apiUrl(`/api/session?refresh=${Date.now()}`), { cache: 'no-store' });
+    if (response.status === 401 || response.status === 403) return null;
+    if (!response.ok) return null;
+    return await response.json();
+  } catch (err) {
+    console.warn('[StoreProvider] Session request failed:', err);
+    return null;
+  }
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
 
-  // Keep a live ref so action callbacks always read the freshest state,
-  // regardless of how the actions memo is memoized. This prevents stale
-  // closures that caused the post-login blank screen.
   const stateRef = useRef(state);
   stateRef.current = state;
   const activeUserIdRef = useRef(state.currentUserId);
@@ -82,14 +85,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (!active) return;
         if (user) dispatch({ type: 'SIGN_IN', user });
         else if (!identity) dispatch({ type: 'SIGN_OUT' });
-        else console.warn('The signed-in account could not be refreshed; keeping the current session visible.');
+        else console.warn('The signed-in account could not be refreshed; keeping current session visible.');
       } catch (err) {
         console.error('Failed to restore session', err);
       } finally {
         if (active) dispatch({ type: 'AUTH_CHECKED' });
       }
     };
+
     refresh();
+
     const unsubscribe = onAuthChange((event) => {
       persistIdentityCookiesFromLocalStorage();
       if (event === AUTH_EVENTS.LOGOUT) {
@@ -148,11 +153,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, [state.authChecked, state.currentUserId, state.postsCache, state.postsHasMoreCache, state.users]);
 
-  // Hydrate the signed-in user's profile from the database, so edits (like bio)
-  // survive reloads and follow the user across devices. A member who has no
-  // profile row yet (their very first sign-in) is registered immediately by
-  // saving their starter profile, so they appear in everyone else's directory
-  // and suggested connections right away.
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -190,9 +190,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .catch((err) => console.error('Failed to load groups', err));
   }, [state.currentUserId]);
 
-  // Keep the community roster in sync with the real registered members in the
-  // database. Polling means a member who signs up in another session shows up
-  // in Suggested Connections and becomes available for messaging within moments.
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -212,8 +209,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [state.currentUserId]);
 
-  // Load the social graph from the perspective of the signed-in member and keep
-  // it fresh so incoming friend requests appear without a manual reload.
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -233,10 +228,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [state.currentUserId]);
 
-  // Load the active space's feed. Returning to a space already visited shows
-  // its cached posts instantly (no skeleton, no blank flash) while a background
-  // refresh keeps it current; a space visited for the first time shows the feed
-  // skeleton until its posts arrive.
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -310,8 +301,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [state.currentUserId, state.activeGroupId]);
 
-  // Chat messages are shared across every space, so they load once per session
-  // (not on every space switch) to avoid duplicate fetches.
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -355,14 +344,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         .then((user) => {
           if (cancelled) return;
           if (user) dispatch({ type: 'SIGN_IN', user });
-          else {
-            dispatch({ type: 'SIGN_OUT' });
-            logout().catch(() => undefined);
-          }
         })
         .catch((error) => console.error('Failed to verify session', error));
     };
-    const interval = setInterval(verify, 15000);
+    const interval = setInterval(verify, 30000);
     return () => {
       cancelled = true;
       clearInterval(interval);
@@ -373,9 +358,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const getCurrent = (): User | undefined =>
       stateRef.current.users.find((u) => u?.id === stateRef.current.currentUserId);
 
-    // Persist a notification for a recipient. Fire-and-forget: the recipient's
-    // client picks it up on its next poll (badge + toast). Never notifies the
-    // actor about their own action.
     const emit = (n: Omit<Notification, 'id' | 'createdAt' | 'isRead'>) => {
       if (!n.userId || n.userId === n.actorId) return;
       const notification: Notification = {
@@ -405,7 +387,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         postSavePromisesRef.current.clear();
         clearCachedAppState();
         dispatch({ type: 'SIGN_OUT' });
-        void supabase.auth.signOut().catch((err) => console.error('Failed to clear the Supabase session', err));
+        void supabase.auth.signOut().catch((err) => console.error('Failed to clear Supabase session', err));
         logout().catch((err) => console.error('Failed to sign out', err));
       },
 
@@ -522,7 +504,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (persisted === false || !stateRef.current.posts.some((candidate) => candidate.id === postId)) return;
           await savePost(updated);
         } catch (err) {
-          console.error('Failed to update the post video', err);
+          console.error('Failed to update post video', err);
         }
       },
 
@@ -562,8 +544,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const me = getCurrent();
         if (!me) return;
         const post = stateRef.current.posts.find((p) => p.id === postId) ?? sourcePost;
-        // Read the pre-toggle state to tell a like from an unlike, so a
-        // notification only fires when the member is adding a like.
         const currentLikes = postLikes(post);
         const isNewLike = post ? !currentLikes.includes(me.id) : false;
         dispatch({ type: 'TOGGLE_LIKE', postId, userId: me.id });
@@ -607,6 +587,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           );
         }
       },
+
       unflagPost(postId) {
         dispatch({ type: 'UNFLAG_POST', postId });
         const post = stateRef.current.posts.find((p) => p.id === postId);
@@ -616,6 +597,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           );
         }
       },
+
       deletePost(postId) {
         dispatch({ type: 'DELETE_POST', postId });
         deletePostRemote(postId).catch((err) => console.error('Failed to delete post', err));
@@ -631,6 +613,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           console.error('Failed to save friend request', err);
         }
       },
+
       async acceptFriend(otherId) {
         const me = getCurrent();
         if (!me) return;
@@ -641,6 +624,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           console.error('Failed to accept friend request', err);
         }
       },
+
       async removeFriend(otherId) {
         const me = getCurrent();
         if (!me) return;
@@ -666,7 +650,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           readAt: null,
         };
         dispatch({ type: 'SEND_MESSAGE', message });
-        // Notify the other participant that they have a new direct message.
         const recipient = threadId.split('__').find((id) => id !== me.id);
         saveMessage(message)
           .then(() => {
@@ -745,6 +728,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (!me) return;
         dispatch({ type: 'JOIN_STREAM', streamId, userId: me.id });
       },
+
       leaveStream(streamId) {
         const me = getCurrent();
         if (!me) return;
@@ -778,6 +762,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         };
         dispatch({ type: 'ADD_ALERT', alert });
       },
+
       dismissAlert(id) {
         dispatch({ type: 'DISMISS_ALERT', id });
       },
@@ -791,7 +776,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
 export { useStore };
 
-// helper for the Landing page demo
 export function pickGooglePhoto(seed: string): string {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
