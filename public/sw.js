@@ -103,11 +103,12 @@ if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') 
         var data = {};
         try {
           data = event.data ? event.data.json() : {};
+          if (!data || typeof data !== 'object') data = {};
         } catch (parseError) {
           data = { body: event.data ? event.data.text() : 'You received a new message.' };
         }
 
-        var notificationData = data.data || {};
+        var notificationData = data.data && typeof data.data === 'object' ? data.data : {};
         notificationData.url = data.url || notificationData.url || '/chat';
         event.waitUntil(
           self.registration.showNotification(data.title || 'New Message', {

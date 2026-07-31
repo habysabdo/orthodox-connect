@@ -4,10 +4,12 @@ import { Avatar } from './ui';
 import { useStore, getUser } from '@/store/context';
 import { useNotifications, useNotificationNavigate } from '@/store/notifications';
 import { timeAgo } from '@/utils/format';
+import { urlBase64ToUint8Array } from '@/utils/push';
 import type { Notification as AppNotification } from '@/types';
 import {
   enablePushNotifications,
   getPushStatus,
+  savePushSubscription,
   updatePushPresence,
   type PushStatus,
 } from '@/utils/pushNotifications';
@@ -97,7 +99,7 @@ export function NotificationBell({ activeThreadId }: { activeThreadId: string | 
     setOpen(false);
   };
 
-  const enablePush = async () => {
+  const handleEnablePush = async () => {
     if (pushBusy || pushStatus === 'enabled') return;
     if (pushStatus === 'unavailable') {
       setShowIosBanner(true);
@@ -106,20 +108,43 @@ export function NotificationBell({ activeThreadId }: { activeThreadId: string | 
     setPushBusy(true);
     setPushMessage('');
     try {
-      const nextStatus = await enablePushNotifications();
-      setPushStatus(nextStatus);
-      setShowPushPrompt(false);
-      if (nextStatus === 'enabled') {
-        setPushMessage('Lock-screen alerts are enabled on this device.');
-        void updatePushPresence(activeThreadId).catch(() => undefined);
-      } else if (nextStatus === 'unconfigured') {
-        setPushMessage('Lock-screen alerts are not configured yet.');
-      } else if (nextStatus === 'denied') {
-        setPushMessage('Notifications are blocked in your browser settings.');
-      } else if (nextStatus === 'unavailable') {
-        setShowIosBanner(true);
+      if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+        setPushStatus('unsupported');
+        setPushMessage('Lock-screen alerts are not supported by this browser.');
+        return;
       }
+
+      const permission = await window.Notification.requestPermission();
+      if (permission !== 'granted') {
+        const nextStatus: PushStatus = permission === 'denied' ? 'denied' : 'disabled';
+        setPushStatus(nextStatus);
+        setPushMessage(permission === 'denied'
+          ? 'Notifications are blocked in your browser settings.'
+          : 'Notification permission was not granted.');
+        return;
+      }
+
+      const publicKey = import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY?.trim();
+      if (!publicKey) {
+        setPushStatus('unconfigured');
+        setPushMessage('Lock-screen alerts are not configured yet.');
+        return;
+      }
+
+      await navigator.serviceWorker.register('/sw.js');
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription() || await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+
+      await savePushSubscription(subscription);
+      setPushStatus('enabled');
+      setShowPushPrompt(false);
+      setPushMessage('Lock-screen alerts are enabled on this device.');
+      void updatePushPresence(activeThreadId).catch(() => undefined);
     } catch (caught) {
+      setPushStatus(window.Notification?.permission === 'denied' ? 'denied' : 'disabled');
       setPushMessage(caught instanceof Error ? caught.message : 'Unable to enable lock-screen alerts.');
     } finally {
       setPushBusy(false);
@@ -237,7 +262,7 @@ export function NotificationBell({ activeThreadId }: { activeThreadId: string | 
                 {(pushStatus === 'disabled' || pushStatus === 'unconfigured') && (
                   <button
                     type="button"
-                    onClick={() => void enablePush()}
+                    onClick={() => void handleEnablePush()}
                     disabled={pushBusy}
                     className="shrink-0 rounded-full bg-gold-400 px-3 py-1.5 text-[11px] font-bold text-ink-950 transition-colors hover:bg-gold-300 disabled:opacity-60"
                   >
@@ -262,7 +287,7 @@ export function NotificationBell({ activeThreadId }: { activeThreadId: string | 
         </div>
         <button
           type="button"
-          onClick={() => void enablePush()}
+          onClick={() => void handleEnablePush()}
           disabled={pushBusy}
           className="shrink-0 rounded-full bg-gold-400 px-3 py-2 text-xs font-bold text-ink-950 transition-colors hover:bg-gold-300 disabled:opacity-60"
         >
