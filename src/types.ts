@@ -134,7 +134,7 @@ export interface ChatAttachment {
 
 export interface Thread {
   id: string;
-  participantIds: [string, string];
+  participantIds: string[];
   messages: ChatMessage[];
 }
 

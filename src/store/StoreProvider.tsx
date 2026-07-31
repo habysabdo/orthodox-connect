@@ -110,13 +110,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      loadSessionUser()
-        .then((user) => {
+      void (async () => {
+        try {
+          const user = await loadSessionUser();
           if (!active) return;
           if (user) dispatch({ type: 'SIGN_IN', user });
-          dispatch({ type: 'AUTH_CHECKED' });
-        })
-        .catch((err) => console.error('Failed to sync session', err));
+        } catch (err) {
+          console.error('Failed to sync session', err);
+        } finally {
+          if (active) dispatch({ type: 'AUTH_CHECKED' });
+        }
+      })();
     });
 
     const { data: supabaseAuthListener } = supabase.auth.onAuthStateChange((event) => {
@@ -339,13 +343,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!state.currentUserId) return;
     let cancelled = false;
-    const verify = () => {
-      loadSessionUser()
-        .then((user) => {
-          if (cancelled) return;
-          if (user) dispatch({ type: 'SIGN_IN', user });
-        })
-        .catch((error) => console.error('Failed to verify session', error));
+    const verify = async () => {
+      try {
+        const user = await loadSessionUser();
+        if (cancelled) return;
+        if (user) dispatch({ type: 'SIGN_IN', user });
+      } catch (error) {
+        console.error('Failed to verify session', error);
+      }
     };
     const interval = setInterval(verify, 30000);
     return () => {

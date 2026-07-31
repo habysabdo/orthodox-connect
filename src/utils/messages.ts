@@ -43,8 +43,13 @@ export function buildThreads(messages: ChatMessage[], known: Thread[] = []): Thr
   const seen = new Set<string>();
 
   for (const t of known) {
+    if (!t?.id) continue;
     seen.add(t.id);
-    threads.push({ ...t, messages: byThread.get(t.id) ?? t.messages });
+    threads.push({
+      ...t,
+      participantIds: Array.isArray(t.participantIds) ? t.participantIds.filter(Boolean) : [],
+      messages: byThread.get(t.id) ?? (Array.isArray(t.messages) ? t.messages : []),
+    });
   }
 
   for (const [threadId, msgs] of byThread) {
