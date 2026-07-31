@@ -8,6 +8,9 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 
 const Landing = lazy(() => import('./components/Landing').then((module) => ({ default: module.Landing })));
 const AppShell = lazy(() => import('./components/AppShell').then((module) => ({ default: module.AppShell })));
+const IncomingCallOverlay = lazy(() =>
+  import('./components/IncomingCallOverlay').then((module) => ({ default: module.IncomingCallOverlay })),
+);
 
 function Gate() {
   const { users, currentUserId, authChecked } = useStore();
@@ -35,11 +38,20 @@ function Gate() {
   }
   console.log('[Gate] User ready → AppShell', me.email);
   return (
-    <ErrorBoundary name="Community" resetKeys={[currentUserId]}>
-      <Suspense fallback={<LoadingScreen label="Loading your community…" />}>
-        <AppShell />
-      </Suspense>
-    </ErrorBoundary>
+    <>
+      <ErrorBoundary name="Community" resetKeys={[currentUserId]}>
+        <Suspense fallback={<LoadingScreen label="Loading your community…" />}>
+          <AppShell />
+        </Suspense>
+      </ErrorBoundary>
+      {/* Calls have to reach the member wherever they are, including inside a
+          prayer room, so the listener lives above every view. */}
+      <ErrorBoundary name="Incoming call" fallback={null} resetKeys={[currentUserId]}>
+        <Suspense fallback={null}>
+          <IncomingCallOverlay />
+        </Suspense>
+      </ErrorBoundary>
+    </>
   );
 }
 

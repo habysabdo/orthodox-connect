@@ -1,6 +1,6 @@
 /* OrthodoxConnect service worker — legacy-safe offline caching and push. */
 
-var VERSION = 'v6';
+var VERSION = 'v7';
 var APP_SHELL = 'oc-shell-' + VERSION;
 var RUNTIME = 'oc-runtime-' + VERSION;
 var PRECACHE_URLS = ['/', '/index.html', '/manifest.json', '/icon.svg', '/icon-192.png', '/icon-512.png'];
@@ -73,6 +73,13 @@ if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') 
       // Vite filenames are content-hashed. Let the browser fetch them directly
       // so an old service worker cannot keep JavaScript from a previous deploy.
       if (url.origin === self.location.origin && url.pathname.indexOf('/assets/') === 0) {
+        return;
+      }
+
+      // The ringtone is always fetched from the network. Caching it would let a
+      // "not found" response (the SPA fallback) be replayed forever once a real
+      // ringtone file is added to the deployment.
+      if (url.origin === self.location.origin && url.pathname === '/ringtone.mp3') {
         return;
       }
 
