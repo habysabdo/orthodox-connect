@@ -2,6 +2,7 @@
 
 export type Role = 'admin' | 'user';
 export type UserStatus = 'active' | 'blocked';
+export type Theme = 'light' | 'dark' | 'ancient';
 
 export interface User {
   id: string;
