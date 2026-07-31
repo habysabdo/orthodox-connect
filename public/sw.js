@@ -1,6 +1,6 @@
 /* OrthodoxConnect service worker — legacy-safe offline caching and push. */
 
-var VERSION = 'v6';
+var VERSION = 'v7';
 var APP_SHELL = 'oc-shell-' + VERSION;
 var RUNTIME = 'oc-runtime-' + VERSION;
 var PRECACHE_URLS = ['/', '/index.html', '/manifest.json', '/icon.svg', '/icon-192.png', '/icon-512.png'];
