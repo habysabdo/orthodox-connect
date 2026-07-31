@@ -1,14 +1,12 @@
 [build]
+  base = "."
   command = "npm run build"
   publish = "dist"
 
-[[redirects]]
-  from = "/admin"
-  to = "/index.html"
-  status = 200
-
+# Netlify Functions declare their own `/api/*` routes via `export const config`,
+# so they are matched before this rule. Everything else falls back to the built
+# index.html in `dist` so client-side routes resolve on a hard refresh.
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-  force = false
