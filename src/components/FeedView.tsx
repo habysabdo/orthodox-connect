@@ -7,27 +7,30 @@ import { useStore } from '@/store/context';
 import { useUI } from '@/store/ui';
 import { CommunityAlerts } from './CommunityAlerts';
 import { FeedSkeleton } from './ui';
+import { StoriesCarousel } from './StoriesCarousel';
 import { hasAdminAccess } from '@/utils/users';
 import type { Post } from '@/types';
 
 function IsolatedFeedPost({ post }: { post: Post }) {
   return (
-    <ErrorBoundary
-      name={`Feed post ${post.id}`}
-      resetKeys={[post.id, post.video, post.videoStatus]}
-      fallback={(reset) => (
-        <article className="card flex min-h-40 flex-col items-center justify-center px-6 py-8 text-center" role="alert">
-          <AlertCircle size={28} className="text-red-300" aria-hidden="true" />
-          <p className="mt-3 text-sm font-semibold text-ink-100">This post could not be displayed</p>
-          <p className="mt-1 text-xs text-ink-400">Other posts remain available.</p>
-          <button type="button" onClick={reset} className="ghost-btn mt-4 px-3 py-1.5 text-xs">
-            Try this post again
-          </button>
-        </article>
-      )}
-    >
-      <PostCard post={post} />
-    </ErrorBoundary>
+    <div id={`feed-post-${post.id}`} className="scroll-mt-24">
+      <ErrorBoundary
+        name={`Feed post ${post.id}`}
+        resetKeys={[post.id, post.video, post.videoStatus]}
+        fallback={(reset) => (
+          <article className="flex min-h-40 flex-col items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 px-6 py-8 text-center shadow-sm" role="alert">
+            <AlertCircle size={28} className="text-red-700" aria-hidden="true" />
+            <p className="mt-3 text-sm font-semibold text-amber-950">This post could not be displayed</p>
+            <p className="mt-1 text-xs text-amber-800/70">Other posts remain available.</p>
+            <button type="button" onClick={reset} className="mt-4 rounded-lg border border-amber-300 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-950 hover:bg-amber-200">
+              Try this post again
+            </button>
+          </article>
+        )}
+      >
+        <PostCard post={post} />
+      </ErrorBoundary>
+    </div>
   );
 }
 
@@ -78,7 +81,7 @@ export function FeedView() {
   const permalinkPost = posts.find((post) => post?.id === permalinkPostId) ?? null;
 
   return (
-    <div className="space-y-4">
+    <div className="feed-parchment space-y-4 rounded-[1.75rem] bg-gradient-to-b from-amber-50/45 via-orange-50/25 to-transparent p-1 sm:p-2">
       <CommunityAlerts alerts={alerts} />
 
       <section className="rounded-2xl border border-amber-100 bg-gradient-to-r from-amber-50 to-orange-50 p-5 shadow-sm dark:border-gold-400/25 dark:from-gold-900/35 dark:to-red-950/20">
@@ -125,13 +128,15 @@ export function FeedView() {
 
       <Composer />
 
+      <StoriesCarousel posts={posts} users={users} currentUser={me} />
+
       {postsLoading ? (
         <FeedSkeleton />
       ) : posts.length === 0 && !permalinkPost ? (
-        <div className="card flex flex-col items-center justify-center py-16 text-center">
-          <Sparkles size={32} className="mb-3 text-gold-300" />
-          <p className="font-semibold text-ink-100">The feed is quiet</p>
-          <p className="mt-1 text-sm text-ink-400">Be the first to share something today.</p>
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 py-16 text-center shadow-sm">
+          <Sparkles size={32} className="mb-3 text-amber-700" />
+          <p className="font-serif font-semibold text-amber-950">The feed is quiet</p>
+          <p className="mt-1 text-sm text-amber-800/70">Be the first to share something today.</p>
         </div>
       ) : (
         <>
@@ -146,7 +151,7 @@ export function FeedView() {
                 type="button"
                 onClick={() => void loadMorePosts()}
                 disabled={postsLoadingMore}
-                className="ghost-btn mx-auto flex min-w-36 justify-center"
+                className="mx-auto flex min-w-36 items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-100 px-4 py-2.5 font-semibold text-amber-950 transition-colors hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {postsLoadingMore ? <Loader2 size={16} className="animate-spin" /> : null}
                 {postsLoadingMore ? 'Loading…' : 'Load more posts'}

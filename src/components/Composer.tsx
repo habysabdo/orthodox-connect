@@ -302,7 +302,7 @@ export function Composer() {
   };
 
   return (
-    <form className="card p-4" onSubmit={publish}>
+    <form className="card border-amber-200 bg-amber-50/95 p-4" onSubmit={publish}>
       {submissionNotice && (
         <div className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-sm font-medium text-emerald-200" role="status" aria-live="polite">
           <CheckCircle2 size={18} className="shrink-0" />
@@ -329,13 +329,14 @@ export function Composer() {
             </div>
           )}
           <textarea
+            data-feed-composer
             ref={textareaRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onFocus={() => setFocused(true)}
             placeholder={isPromo ? 'Describe your business, service, event, or community offering...' : isPrayerRequest ? 'Share your prayer request...' : "What's on your mind, in Christ?"}
             rows={focused ? 3 : 1}
-            className="w-full resize-none rounded-xl border border-ink-700 bg-ink-900/60 px-4 py-3 text-sm text-ink-100 placeholder-ink-400 outline-none transition-all focus:border-gold-400/50 focus:ring-2 focus:ring-gold-400/15"
+            className="w-full resize-none rounded-xl border border-amber-200 bg-orange-50/80 px-4 py-3 text-sm text-amber-950 placeholder-amber-800/55 outline-none transition-all focus:border-amber-500 focus:ring-2 focus:ring-amber-400/20 dark:border-ink-700 dark:bg-ink-900/60 dark:text-ink-100 dark:placeholder-ink-400"
           />
 
           {(imagePreview || image) && (
