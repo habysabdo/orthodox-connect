@@ -4,7 +4,7 @@ import { db } from '../../db/index.js';
 import { chatAttachments, messages } from '../../db/schema.js';
 import type { ChatAttachmentKind, ChatMessage } from '../../src/types.js';
 import { isResponse, requireAppUser } from './_auth.js';
-import { sendDirectMessagePush } from './_push.js';
+import { triggerPushDelivery } from './_pushTrigger.js';
 
 // Persistence for direct chat messages. Each message document lives in the
 // `data` column; `thread_id` and `created_at` are promoted for ordering.
@@ -79,8 +79,8 @@ export default async (req: Request) => {
     const participants = storedMessage.threadId.split('__');
     const recipientId = participants.length === 2 ? participants.find((id) => id !== actor.id) : undefined;
     if (inserted.length && recipientId) {
-      await sendDirectMessagePush({ recipientId, senderName: actor.name, message: storedMessage })
-        .catch(() => console.error('Direct message was saved, but push delivery could not be started'));
+      await triggerPushDelivery(req, { kind: 'direct-message', recordId: storedMessage.id })
+        .catch(() => console.error('Direct message was saved, but its push background trigger failed'));
     }
     return Response.json({ ok: true });
   }

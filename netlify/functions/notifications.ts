@@ -4,6 +4,7 @@ import { db } from '../../db/index.js';
 import { notifications } from '../../db/schema.js';
 import type { Notification } from '../../src/types.js';
 import { isResponse, requireAppUser } from './_auth.js';
+import { triggerPushDelivery } from './_pushTrigger.js';
 
 // Persistence for in-app notifications. Each row is addressed to a single
 // recipient (`user_id`); the client subscribes to its own notifications by
@@ -35,7 +36,7 @@ export default async (req: Request) => {
       return Response.json({ error: 'id, userId, actorId and type are required' }, { status: 400 });
     }
     if (n.actorId !== actor.id) return Response.json({ error: 'Invalid notification actor' }, { status: 403 });
-    await db
+    const inserted = await db
       .insert(notifications)
       .values({
         id: n.id,
@@ -49,7 +50,12 @@ export default async (req: Request) => {
         isRead: n.isRead ?? false,
         createdAt: n.createdAt,
       })
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ id: notifications.id });
+    if (inserted.length) {
+      await triggerPushDelivery(req, { kind: 'notification', recordId: n.id })
+        .catch(() => console.error('Notification was saved, but its push background trigger failed'));
+    }
     return Response.json({ ok: true });
   }
 

@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import { pushSubscriptions } from '../../db/schema.js';
 import { FALLBACK_VAPID_PUBLIC_KEY } from '../../src/config/push.js';
-import type { ChatMessage } from '../../src/types.js';
+import type { ChatMessage, Notification } from '../../src/types.js';
 
 function env(name: string): string {
   return process.env[name]?.trim() ?? '';
@@ -17,7 +17,7 @@ function getConfiguredPublicVapidKey(): string {
 }
 
 function getPrivateVapidKey(): string {
-  return env('WEB_PUSH_VAPID_PRIVATE_KEY') || env('VAPID_PRIVATE_KEY');
+  return env('WEB_PUSH_PRIVATE_KEY');
 }
 
 export function getPublicVapidKey(): string {
@@ -50,11 +50,7 @@ function messagePreview(message: ChatMessage): string {
   return attachment.name ? `Sent ${attachment.name}` : 'Sent you an attachment';
 }
 
-export async function sendDirectMessagePush(input: {
-  recipientId: string;
-  senderName: string;
-  message: ChatMessage;
-}): Promise<void> {
+async function sendPushPayload(recipientId: string, payload: string): Promise<void> {
   if (!configureWebPush()) {
     console.warn('Web push skipped because VAPID environment variables are not configured');
     return;
@@ -63,24 +59,8 @@ export async function sendDirectMessagePush(input: {
   const subscriptions = await db
     .select()
     .from(pushSubscriptions)
-    .where(eq(pushSubscriptions.userId, input.recipientId));
+    .where(eq(pushSubscriptions.userId, recipientId));
   if (!subscriptions.length) return;
-
-  const chatUrl = `https://orthodoxconnect.live/chat/${encodeURIComponent(input.message.threadId)}`;
-  const payload = JSON.stringify({
-    title: input.senderName,
-    body: messagePreview(input.message),
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
-    tag: `direct-message-${input.message.threadId}`,
-    url: chatUrl,
-    data: {
-      type: 'direct-message',
-      threadId: input.message.threadId,
-      messageId: input.message.id,
-      url: chatUrl,
-    },
-  });
 
   await Promise.allSettled(
     subscriptions.map(async (subscription) => {
@@ -101,8 +81,62 @@ export async function sendDirectMessagePush(input: {
           await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, subscription.id));
           return;
         }
-        console.error('Unable to send direct message push notification', { statusCode });
+        console.error('Unable to send web push notification', { statusCode });
       }
     }),
   );
+}
+
+export async function sendDirectMessagePush(input: {
+  recipientId: string;
+  senderName: string;
+  message: ChatMessage;
+}): Promise<void> {
+  const chatUrl = `https://orthodoxconnect.live/chat/${encodeURIComponent(input.message.threadId)}`;
+  const payload = JSON.stringify({
+    title: input.senderName,
+    body: messagePreview(input.message),
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    tag: `direct-message-${input.message.threadId}`,
+    url: chatUrl,
+    data: {
+      type: 'direct-message',
+      threadId: input.message.threadId,
+      messageId: input.message.id,
+      url: chatUrl,
+    },
+  });
+
+  await sendPushPayload(input.recipientId, payload);
+}
+
+export async function sendNotificationPush(notification: Notification): Promise<void> {
+  const isMessage = notification.type === 'message';
+  const destination = isMessage && notification.threadId
+    ? `/chat/${encodeURIComponent(notification.threadId)}`
+    : notification.postId
+      ? `/post/${encodeURIComponent(notification.postId)}`
+      : '/';
+  const url = `https://orthodoxconnect.live${destination}`;
+  const payload = JSON.stringify({
+    title: notification.actorName || 'OrthodoxConnect',
+    body: notification.content || 'You have a new notification.',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    tag: isMessage && notification.threadId
+      ? `direct-message-${notification.threadId}`
+      : `notification-${notification.id}`,
+    url,
+    data: {
+      type: notification.type,
+      notificationId: notification.id,
+      actorId: notification.actorId,
+      postId: notification.postId ?? null,
+      threadId: notification.threadId ?? null,
+      url,
+    },
+  });
+
+  await sendPushPayload(notification.userId, payload);
 }

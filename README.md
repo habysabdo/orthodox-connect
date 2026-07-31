@@ -23,10 +23,10 @@ The library ID and CDN hostname have project defaults. They can be overridden wi
 
 ## Web push configuration
 
-Direct-message push notifications require VAPID credentials in the Netlify environment:
+Direct-message and in-app notification pushes require VAPID credentials in the Netlify environment:
 
 - `WEB_PUSH_VAPID_PUBLIC_KEY`
-- `WEB_PUSH_VAPID_PRIVATE_KEY`
+- `WEB_PUSH_PRIVATE_KEY`
 - `WEB_PUSH_VAPID_SUBJECT` (optional; defaults to the OrthodoxConnect support email)
 - `VITE_VAPID_PUBLIC_KEY` or `VITE_WEB_PUSH_PUBLIC_KEY` (optional browser-facing alias for the same public key)
 
