@@ -18,9 +18,6 @@ import {
 } from '../utils/notifications';
 import { startVisiblePolling } from '../utils/visiblePolling';
 
-// How often we re-query the notifications endpoint. The rest of the app keeps
-// shared data fresh by polling (roster every 20s, social graph every 25s); a
-// tighter 8s cadence here keeps the bell and toasts feeling live.
 const POLL_MS = 8000;
 
 interface NotificationsState {
@@ -35,18 +32,11 @@ interface NotificationsState {
 
 const NotificationsCtx = createContext<NotificationsState | null>(null);
 
-// Subscribes the signed-in member to their notifications. Data lives in the
-// site's Netlify Database; this provider polls the `/api/notifications`
-// endpoint and treats any row it hasn't seen before as a fresh INSERT — which
-// both feeds the unread badge and pops a toast, the same effect a realtime
-// insert event would produce.
 export function NotificationsProvider({ children }: { children: ReactNode }) {
   const { currentUserId } = useStore();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [toasts, setToasts] = useState<Notification[]>([]);
 
-  // Ids we've already observed, so a poll only toasts genuinely new rows. The
-  // very first load for a user seeds this set without toasting the backlog.
   const seenRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
   const currentUserIdRef = useRef(currentUserId);
@@ -56,7 +46,6 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     setToasts((list) => list.filter((t) => t.id !== id));
   }, []);
 
-  // Reset the subscription whenever the signed-in identity changes.
   useEffect(() => {
     seenRef.current = new Set();
     initializedRef.current = false;
@@ -68,27 +57,29 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
     const stopPolling = startVisiblePolling(
       async () => {
-        const rows = await loadNotifications(currentUserId);
-        if (cancelled || currentUserIdRef.current !== currentUserId) return;
-        setNotifications(rows);
+        try {
+          const rows = await loadNotifications(currentUserId);
+          if (cancelled || currentUserIdRef.current !== currentUserId) return;
+          setNotifications(rows);
 
-        if (!initializedRef.current) {
-          // First load — remember everything so the existing backlog never
-          // toasts, then start reacting to inserts from here on.
-          rows.forEach((r) => seenRef.current.add(r.id));
-          initializedRef.current = true;
-          return;
-        }
+          if (!initializedRef.current) {
+            rows.forEach((r) => seenRef.current.add(r.id));
+            initializedRef.current = true;
+            return;
+          }
 
-        const fresh = rows.filter((r) => !seenRef.current.has(r.id));
-        fresh.forEach((r) => seenRef.current.add(r.id));
-        if (fresh.length) {
-          // Newest first, capped so a burst can't fill the screen.
-          setToasts((list) => [...fresh.slice(0, 3), ...list].slice(0, 3));
+          const fresh = rows.filter((r) => !seenRef.current.has(r.id));
+          fresh.forEach((r) => seenRef.current.add(r.id));
+          if (fresh.length) {
+            setToasts((list) => [...fresh.slice(0, 3), ...list].slice(0, 3));
+          }
+        } catch (err) {
+          console.error('[Notifications] Failed to poll notifications:', err);
         }
       },
       { intervalMs: POLL_MS, onError: (error) => console.error('Failed to load notifications', error) },
     );
+
     return () => {
       cancelled = true;
       stopPolling();
@@ -96,12 +87,13 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   }, [currentUserId]);
 
   const markAllRead = useCallback(() => {
-    if (!currentUserId) return;
+    const userId = currentUserIdRef.current;
+    if (!userId) return;
     setNotifications((list) => list.map((n) => ({ ...n, isRead: true })));
-    markAllNotificationsRead(currentUserId).catch((err) =>
+    markAllNotificationsRead(userId).catch((err) =>
       console.error('Failed to mark notifications read', err),
     );
-  }, [currentUserId]);
+  }, []);
 
   const markRead = useCallback((id: string) => {
     if (!currentUserIdRef.current || !id) return;
@@ -111,7 +103,11 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  const unreadCount = notifications.reduce((sum, n) => (n.isRead ? sum : sum + 1), 0);
+  const unreadCount = useMemo(
+    () => notifications.reduce((sum, n) => (n.isRead ? sum : sum + 1), 0),
+    [notifications],
+  );
+
   const value = useMemo(
     () => ({ notifications, unreadCount, toasts, markAllRead, markRead, dismissToast }),
     [dismissToast, markAllRead, markRead, notifications, toasts, unreadCount],
@@ -130,11 +126,6 @@ export function useNotifications(): NotificationsState {
   return ctx;
 }
 
-// Resolves a notification into its click-through action, shared by the dropdown
-// items and the floating toasts:
-//   • a 'like' jumps to the feed and highlights the liked post
-//   • a 'message' opens the DM thread with the sender
-// The notification is marked read as a side effect of following it.
 export function useNotificationNavigate() {
   const { markRead } = useNotifications();
   const { openThreadWith } = useStore();
