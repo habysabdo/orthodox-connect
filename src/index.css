@@ -200,6 +200,23 @@ html.theme-transition * {
   animation: reel-heart-burst 650ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
+:root:not(.dark) .feed-parchment .card {
+  border-color: rgb(252 211 77 / 0.6);
+  background-color: rgb(255 251 235 / 0.96);
+}
+
+:root:not(.dark) .feed-parchment .card [class~='border-ink-700'] {
+  border-color: rgb(245 158 11 / 0.22);
+}
+
+:root:not(.dark) .feed-parchment .card [class~='bg-ink-800'] {
+  background-color: rgb(254 243 199 / 0.72);
+}
+
+:root:not(.dark) .feed-parchment .card [class~='hover:bg-ink-800']:hover {
+  background-color: rgb(253 230 138 / 0.62);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .reel-heart-burst {
     animation-duration: 180ms;
