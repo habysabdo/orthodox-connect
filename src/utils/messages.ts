@@ -28,6 +28,30 @@ export async function markMessagesRead(threadId: string, messageIds: string[]): 
   return res.json();
 }
 
+// Publish an incoming call signal to reach the target user anywhere in the app
+export async function publishIncomingCall(
+  recipientId: string,
+  callData: {
+    roomId: string;
+    title: string;
+    callerId: string;
+    callerName: string;
+    callerPhoto?: string;
+    threadId: string;
+    startedAt: number;
+  }
+): Promise<void> {
+  try {
+    await fetch(apiUrl('/api/call-signal'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipientId, ...callData }),
+    });
+  } catch (err) {
+    console.error('Failed to publish call signal:', err);
+  }
+}
+
 // Rebuild the threads list from persisted messages. Thread ids created at
 // runtime are keyed `a__b`, so each thread's participants are recovered from
 // its id. `known` may supply any threads whose ids don't encode participants.
