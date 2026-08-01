@@ -36,7 +36,7 @@ import { createNotification } from '../utils/notifications';
 import type { Notification } from '../types';
 import { createGroupRemote, loadGroups } from '../utils/groups';
 import { apiUrl } from '../lib/config';
-import { persistIdentityCookiesFromLocalStorage, restoreIdentitySession } from '../lib/auth';
+import { closeIdentityModal, persistIdentityCookiesFromLocalStorage, restoreIdentitySession } from '../lib/auth';
 import { clearCachedAppState, saveCachedAppState } from './persistence';
 import { postComments, postLikes, userName } from '../utils/postSafety';
 import { supabase } from '../lib/supabase';
@@ -100,6 +100,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     refresh();
 
     const handleLogout = () => {
+      // Never let the widget's own modal overlay linger over the app.
+      closeIdentityModal();
       persistIdentityCookiesFromLocalStorage();
       if (active) {
         activeUserIdRef.current = null;
@@ -113,12 +115,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
 
     const handleLogin = () => {
-      // Automatically close the Netlify Identity widget modal overlay
-      try {
-        netlifyIdentity.close();
-      } catch {
-        // Safe fallback if modal is already closed
-      }
+      // Never let the widget's own modal overlay linger over the app.
+      closeIdentityModal();
       persistIdentityCookiesFromLocalStorage();
       loadSessionUser()
         .then((user) => {

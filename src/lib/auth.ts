@@ -49,12 +49,152 @@ export function identityAuthorizationHeaders(): Record<string, string> {
   }
 }
 
-export async function restoreIdentitySession(): Promise<IdentityUser | null> {
+/**
+ * The Identity widget ships its own login UI inside a full-screen iframe.
+ * AuthModal replaces it entirely, so the widget modal is never wanted — close it
+ * defensively wherever an auth event could have opened it. Paired with the
+ * iframe suppression rules in index.css.
+ */
+export function closeIdentityModal(): void {
+  try {
+    netlifyIdentity.close();
+  } catch {
+    // Safe fallback if the widget is not initialized or already closed
+  }
+}
+
+function ensureIdentityInit(): void {
   try {
     netlifyIdentity.init();
   } catch {
     // Safe fallback if initialized already
   }
+}
+
+type IdentityGoTrue = {
+  settings: () => Promise<{ autoconfirm?: boolean; disable_signup?: boolean }>;
+  signup: (email: string, password: string, data?: Record<string, unknown>) => Promise<unknown>;
+};
+
+type IdentityStore = {
+  gotrue: IdentityGoTrue | null;
+  error: unknown;
+  login: (email: string, password: string) => Promise<void>;
+};
+
+/**
+ * The widget's internal store. It exposes `login`/`logout` actions that drive
+ * the same state the widget UI would, which means the `login` and `logout`
+ * events StoreProvider listens for still fire — the modal is simply never
+ * opened. Read `store.gotrue` rather than the public `netlifyIdentity.gotrue`
+ * getter: that getter opens the modal as a side effect when the GoTrue client
+ * is not ready yet.
+ */
+function identityStore(): IdentityStore | null {
+  ensureIdentityInit();
+  const store = (netlifyIdentity as { store?: IdentityStore }).store;
+  return store?.gotrue ? store : null;
+}
+
+export type IdentityAuthResult =
+  | { status: 'signed-in' }
+  | { status: 'confirmation-required' }
+  | { status: 'error'; message: string };
+
+const UNAVAILABLE_MESSAGE =
+  'Sign-in is unavailable right now. Please reload the page and try again.';
+
+function identityFailure(error: unknown, fallback: string): IdentityAuthResult {
+  const detail = error as
+    | { status?: number; json?: Record<string, string>; message?: string }
+    | null
+    | undefined;
+
+  const described =
+    detail?.json?.error_description || detail?.json?.msg || detail?.json?.error;
+  if (described) return { status: 'error', message: described };
+
+  switch (detail?.status) {
+    case 400:
+    case 401:
+      return { status: 'error', message: 'That email and password do not match an account.' };
+    case 403:
+      return { status: 'error', message: 'Registration is currently closed for this community.' };
+    case 404:
+      return { status: 'error', message: 'No account exists for that email address.' };
+    case 422:
+      return {
+        status: 'error',
+        message: 'Please check the email address and choose a longer password.',
+      };
+    default:
+      return { status: 'error', message: detail?.message || fallback };
+  }
+}
+
+/** Authenticate against Netlify Identity without ever opening the widget modal. */
+export async function signInWithIdentity(
+  email: string,
+  password: string,
+): Promise<IdentityAuthResult> {
+  const store = identityStore();
+  if (!store) return { status: 'error', message: UNAVAILABLE_MESSAGE };
+
+  try {
+    // `store.login` funnels failures into `store.error` instead of rejecting,
+    // and clears it at the start of every attempt.
+    await store.login(email, password);
+  } catch (err) {
+    closeIdentityModal();
+    return identityFailure(err, 'Could not sign you in. Please try again.');
+  }
+
+  closeIdentityModal();
+  if (store.error) return identityFailure(store.error, 'Could not sign you in. Please try again.');
+
+  persistIdentityCookiesFromLocalStorage();
+  return { status: 'signed-in' };
+}
+
+/**
+ * Register a new account. When the project autoconfirms signups the new user is
+ * signed in immediately; otherwise they must confirm by email first.
+ */
+export async function signUpWithIdentity(
+  fullName: string,
+  email: string,
+  password: string,
+): Promise<IdentityAuthResult> {
+  const store = identityStore();
+  const gotrue = store?.gotrue;
+  if (!store || !gotrue) return { status: 'error', message: UNAVAILABLE_MESSAGE };
+
+  // The widget normally loads settings when its modal opens. It never opens
+  // here, so read them directly — `autoconfirm` decides whether the account is
+  // usable right away or is waiting on a confirmation email.
+  let autoconfirm = false;
+  try {
+    const settings = await gotrue.settings();
+    autoconfirm = Boolean(settings?.autoconfirm);
+  } catch {
+    // Assume confirmation is required if the settings cannot be read
+  }
+
+  try {
+    await gotrue.signup(email, password, { full_name: fullName });
+  } catch (err) {
+    closeIdentityModal();
+    return identityFailure(err, 'Could not create your account. Please try again.');
+  }
+
+  closeIdentityModal();
+  if (!autoconfirm) return { status: 'confirmation-required' };
+
+  return signInWithIdentity(email, password);
+}
+
+export async function restoreIdentitySession(): Promise<IdentityUser | null> {
+  ensureIdentityInit();
 
   // Netlify Identity persists its browser session in localStorage, but its
   // companion cookies are session cookies. Recreate those cookies first so
