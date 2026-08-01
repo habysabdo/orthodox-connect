@@ -36,7 +36,11 @@ import { createNotification } from '../utils/notifications';
 import type { Notification } from '../types';
 import { createGroupRemote, loadGroups } from '../utils/groups';
 import { apiUrl } from '../lib/config';
-import { persistIdentityCookiesFromLocalStorage, restoreIdentitySession } from '../lib/auth';
+import {
+  identityAuthorizationHeaders,
+  persistIdentityCookiesFromLocalStorage,
+  restoreIdentitySession,
+} from '../lib/auth';
 import {
   clearLocalAuthStorage,
   recoverFromUnauthorizedSession,
@@ -58,9 +62,14 @@ const GOOGLE_PHOTOS = [
 // to the foreground, so switching between tabs cannot turn into a stream of
 // requests to the auth endpoint.
 const SESSION_RECHECK_INTERVAL_MS = 60_000;
+const AUTH_RESTORE_TIMEOUT_MS = 12_000;
 
 async function loadSessionUser(): Promise<User | null> {
-  const response = await fetch(apiUrl(`/api/session?refresh=${Date.now()}`), { cache: 'no-store' });
+  const response = await fetch(apiUrl(`/api/session?refresh=${Date.now()}`), {
+    cache: 'no-store',
+    credentials: 'include',
+    headers: identityAuthorizationHeaders(),
+  });
   if (response.status === 401 || response.status === 403) return null;
   if (!response.ok) throw new Error('Failed to load the signed-in account');
   return response.json();
@@ -80,6 +89,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
+    let authRestoreFinished = false;
+
+    const finishAuthRestore = (timedOut = false) => {
+      if (!active || authRestoreFinished) return;
+      authRestoreFinished = true;
+      window.clearTimeout(authRestoreTimeoutId);
+      if (timedOut) {
+        console.error(
+          `Authentication restore exceeded ${AUTH_RESTORE_TIMEOUT_MS}ms; releasing the loading screen.`,
+        );
+      }
+      dispatch({ type: 'AUTH_CHECKED' });
+    };
+
+    const authRestoreTimeoutId = window.setTimeout(
+      () => finishAuthRestore(true),
+      AUTH_RESTORE_TIMEOUT_MS,
+    );
 
     // Initialize netlifyIdentity widget if not initialized
     try {
@@ -135,7 +162,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         console.error('Failed to restore session', err);
       } finally {
-        if (active) dispatch({ type: 'AUTH_CHECKED' });
+        finishAuthRestore();
       }
     };
     refresh();
@@ -147,7 +174,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    const handleLogin = (user: any) => {
+    const handleLogin = (user: unknown) => {
       // Automatically close the Netlify Identity widget modal overlay
       try {
         netlifyIdentity.close();
@@ -208,6 +235,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     return () => {
       active = false;
+      window.clearTimeout(authRestoreTimeoutId);
       netlifyIdentity.off('logout', handleLogout);
       netlifyIdentity.off('login', handleLogin);
       document.removeEventListener('visibilitychange', handleForeground);

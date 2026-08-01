@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "check:auth-env": "node scripts/check-supabase-env.mjs",
+    "prebuild": "npm run check:auth-env",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
