@@ -1,11 +1,13 @@
 interface VisiblePollingOptions {
   intervalMs: number;
+  /** Run the task once straight away. Defaults to true. */
+  immediate?: boolean;
   onError?: (error: unknown) => void;
 }
 
 export function startVisiblePolling(
   task: () => Promise<unknown>,
-  { intervalMs, onError }: VisiblePollingOptions,
+  { intervalMs, immediate = true, onError }: VisiblePollingOptions,
 ): () => void {
   let stopped = false;
   let running = false;
@@ -26,7 +28,7 @@ export function startVisiblePolling(
     if (document.visibilityState === 'visible') void run();
   };
 
-  void run();
+  if (immediate) void run();
   const interval = window.setInterval(() => void run(), intervalMs);
   document.addEventListener('visibilitychange', runWhenVisible);
 

@@ -1,5 +1,5 @@
-import type { User as IdentityUser } from '@netlify/identity';
 import type { User as SupabaseAuthUser } from '@supabase/supabase-js';
+import type { IdentityUser } from './_auth.js';
 import { createSupabaseServerClient } from './_supabase.js';
 
 export const PROFILE_COLUMNS = 'id, role, full_name, parish, avatar_url, created_at';

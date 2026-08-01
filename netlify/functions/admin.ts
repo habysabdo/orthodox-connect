@@ -1,10 +1,10 @@
-import { admin as identityAdmin, getIdentityConfig } from '@netlify/identity';
 import type { Config } from '@netlify/functions';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import { groupMembers, groups, posts, userProfiles, users } from '../../db/schema.js';
 import type { Post } from '../../src/types.js';
 import { isResponse, requireAdmin } from './_auth.js';
+import { getIdentityUser, listIdentityUsers, updateIdentityUser } from './_identityAdmin.js';
 import {
   identityProfileDefaults,
   loadPublicProfiles,
@@ -13,22 +13,9 @@ import {
 } from './_supabaseProfiles.js';
 
 const SUPER_ADMIN_EMAIL = 'lucasautocode@gmail.com';
-async function setIdentityBan(userId: string, blocked: boolean) {
-  const identity = getIdentityConfig();
-  if (!identity?.token) throw new Error('Identity operator access is unavailable');
-  const response = await fetch(`${identity.url}/admin/users/${encodeURIComponent(userId)}`, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${identity.token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ ban_duration: blocked ? '876000h' : 'none' }),
-  });
-  if (!response.ok) throw new Error('Identity could not update the account login status');
-}
 
-export default async (req: Request) => {
-  const actor = await requireAdmin();
+export default async (req: Request, context: unknown) => {
+  const actor = await requireAdmin(req);
   if (isResponse(actor)) return actor;
   const url = new URL(req.url);
   const resource = url.searchParams.get('resource') ?? 'users';
@@ -45,7 +32,7 @@ export default async (req: Request) => {
           console.error('Failed to load Supabase auth users', error);
           return [];
         }),
-        identityAdmin.listUsers({ perPage: 1000 }).catch((error) => {
+        listIdentityUsers(context).catch((error) => {
           console.error('Failed to load Identity users', error);
           return [];
         }),
@@ -178,13 +165,23 @@ export default async (req: Request) => {
 
     const role = body.role ?? target.role;
     const status = body.status ?? target.status;
-    const identity = await identityAdmin.getUser(body.userId);
-    const appMetadata = { ...(identity.appMetadata ?? {}), roles: role === 'admin' ? ['admin'] : [], blocked: status === 'blocked' };
-    await identityAdmin.updateUser(body.userId, {
-      role: role === 'admin' ? 'admin' : '',
-      app_metadata: appMetadata,
+    // Mirror the change into Identity when operator access is configured. The
+    // app's own record below is what enforces the change either way, so a
+    // missing or failing Identity update must not fail the request.
+    const identity = await getIdentityUser(body.userId, context).catch((error) => {
+      console.error('Failed to read the Identity account', error);
+      return null;
     });
-    await setIdentityBan(body.userId, status === 'blocked');
+    const appMetadata = { ...(identity?.appMetadata ?? {}), roles: role === 'admin' ? ['admin'] : [], blocked: status === 'blocked' };
+    await updateIdentityUser(
+      body.userId,
+      {
+        role: role === 'admin' ? 'admin' : '',
+        app_metadata: appMetadata,
+        ban_duration: status === 'blocked' ? '876000h' : 'none',
+      },
+      context,
+    );
     await db.update(users).set({ role, status }).where(eq(users.id, body.userId));
     const [profileRow] = await db.select().from(userProfiles).where(eq(userProfiles.userId, body.userId));
     if (profileRow?.data && typeof profileRow.data === 'object' && !Array.isArray(profileRow.data)) {

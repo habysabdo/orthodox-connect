@@ -14,7 +14,7 @@ function pairId(a: string, b: string): string {
 // (`requester` sent the request to `addressee`) so the client can render the
 // correct incoming/outgoing state for whichever member is signed in.
 export default async (req: Request) => {
-  const actor = await requireAppUser();
+  const actor = await requireAppUser(req);
   if (isResponse(actor)) return actor;
   if (req.method === 'GET') {
     const rows = await db

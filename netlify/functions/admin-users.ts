@@ -149,7 +149,7 @@ function errorResponse(error: unknown, fallback: string): Response {
 }
 
 export default async (req: Request) => {
-  const actor = await requireAdmin();
+  const actor = await requireAdmin(req);
   if (isResponse(actor)) return actor;
 
   const supabase = getSupabaseAdmin();

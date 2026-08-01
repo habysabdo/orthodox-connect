@@ -13,7 +13,7 @@ const RECENT_LIMIT = 30;
 // read + mark-as-read only, so an alert can never be fabricated by a client.
 // Every administrator reads the same feed and clearing it clears it for all.
 export default async (req: Request) => {
-  const actor = await requireAdmin();
+  const actor = await requireAdmin(req);
   if (isResponse(actor)) return actor;
 
   // Newest alerts plus the full unread total, in one response so the bell can

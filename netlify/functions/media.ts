@@ -28,7 +28,7 @@ function jsonWithCors(data: unknown, status = 200): Response {
 
 export default async (req: Request, context: Context) => {
   if (req.method !== 'OPTIONS') {
-    const actor = await requireAppUser();
+    const actor = await requireAppUser(req);
     // Re-issue the auth failure with the CORS headers attached. A bare 401/403
     // is unreadable to a cross-origin caller, which turns an "expired session"
     // into an opaque media error in the browser console.

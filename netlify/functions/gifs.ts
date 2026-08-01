@@ -26,7 +26,7 @@ interface GiphyResponse {
 }
 
 export default async (req: Request) => {
-  const actor = await requireAppUser();
+  const actor = await requireAppUser(req);
   if (isResponse(actor)) return actor;
   if (req.method !== 'GET') return new Response('Method not allowed', { status: 405 });
 

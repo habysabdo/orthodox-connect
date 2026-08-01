@@ -36,7 +36,15 @@ import { createNotification } from '../utils/notifications';
 import type { Notification } from '../types';
 import { createGroupRemote, loadGroups } from '../utils/groups';
 import { apiUrl } from '../lib/config';
-import { closeIdentityModal, persistIdentityCookiesFromLocalStorage, restoreIdentitySession } from '../lib/auth';
+import {
+  IDENTITY_SESSION_EVENT,
+  clearIdentityCookies,
+  closeIdentityModal,
+  currentAccessToken,
+  hasStoredSession,
+  persistIdentityCookiesFromLocalStorage,
+  restoreIdentitySession,
+} from '../lib/auth';
 import { clearCachedAppState, saveCachedAppState } from './persistence';
 import { postComments, postLikes, userName } from '../utils/postSafety';
 import { supabase } from '../lib/supabase';
@@ -49,8 +57,23 @@ const GOOGLE_PHOTOS = [
   'https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg',
 ];
 
-async function loadSessionUser(): Promise<User | null> {
-  const response = await fetch(apiUrl(`/api/session?refresh=${Date.now()}`), { cache: 'no-store' });
+// How often a signed-in session is revalidated against the server. The check
+// only exists to notice an account that was blocked or signed out elsewhere, so
+// it runs on a calm cadence instead of hammering the API every few seconds.
+const SESSION_REVALIDATE_MS = 5 * 60 * 1000;
+
+/**
+ * Load the signed-in member's account. Requires a live access token: the session
+ * endpoint is authenticated, so calling it without one only ever produces a 401.
+ * Returns null when the server rejects the token, which means the session is
+ * genuinely over.
+ */
+async function loadSessionUser(accessToken: string): Promise<User | null> {
+  const response = await fetch(apiUrl('/api/session'), {
+    cache: 'no-store',
+    credentials: 'include',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
   if (response.status === 401 || response.status === 403) return null;
   if (!response.ok) throw new Error('Failed to load the signed-in account');
   return response.json();
@@ -81,16 +104,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const refresh = async () => {
       try {
+        // A stored session is the only reason to touch any authenticated
+        // endpoint. Visitors on the landing/login page have none, so nothing is
+        // requested for them at all.
+        if (!hasStoredSession()) {
+          if (active) dispatch({ type: 'SIGN_OUT' });
+          return;
+        }
+
         const { error: supabaseSessionError } = await supabase.auth.getSession();
         if (supabaseSessionError) {
           console.warn('Failed to validate the Supabase session', supabaseSessionError);
         }
         const identity = await restoreIdentitySession();
-        const user = identity?.id ? await loadSessionUser() : null;
+        const accessToken = identity?.id ? await currentAccessToken() : null;
+        if (!active) return;
+        if (!accessToken) {
+          dispatch({ type: 'SIGN_OUT' });
+          return;
+        }
+
+        const user = await loadSessionUser(accessToken);
         if (!active) return;
         if (user) dispatch({ type: 'SIGN_IN', user });
-        else if (!identity) dispatch({ type: 'SIGN_OUT' });
-        else console.warn('The signed-in account could not be refreshed; keeping the current session visible.');
+        else dispatch({ type: 'SIGN_OUT' });
       } catch (err) {
         console.error('Failed to restore session', err);
       } finally {
@@ -102,7 +139,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const handleLogout = () => {
       // Never let the widget's own modal overlay linger over the app.
       closeIdentityModal();
-      persistIdentityCookiesFromLocalStorage();
+      clearIdentityCookies();
       if (active) {
         activeUserIdRef.current = null;
         pendingPostIdsRef.current.clear();
@@ -114,21 +151,45 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    // The widget's `login` event and the sign-in form's own signal can both
+    // arrive for the same login; one session load is enough.
+    let loginSyncing = false;
     const handleLogin = () => {
       // Never let the widget's own modal overlay linger over the app.
       closeIdentityModal();
+      // Store the freshly issued session token where both the API requests and a
+      // later page load can find it, then swap the app into the signed-in state.
       persistIdentityCookiesFromLocalStorage();
-      loadSessionUser()
-        .then((user) => {
+      if (loginSyncing) return;
+      loginSyncing = true;
+      void (async () => {
+        try {
+          const accessToken = await currentAccessToken();
+          if (!active) return;
+          if (!accessToken) {
+            dispatch({ type: 'SIGN_OUT' });
+            return;
+          }
+          const user = await loadSessionUser(accessToken);
           if (!active) return;
           if (user) dispatch({ type: 'SIGN_IN', user });
-          dispatch({ type: 'AUTH_CHECKED' });
-        })
-        .catch((err) => console.error('Failed to sync session', err));
+          else dispatch({ type: 'SIGN_OUT' });
+        } catch (err) {
+          console.error('Failed to sync session', err);
+        } finally {
+          loginSyncing = false;
+          // Always release the gate: leaving it closed strands the member on the
+          // "Signing you in…" screen after a successful login.
+          if (active) dispatch({ type: 'AUTH_CHECKED' });
+        }
+      })();
     };
 
     netlifyIdentity.on('logout', handleLogout);
     netlifyIdentity.on('login', handleLogin);
+    // The custom sign-in form authenticates through the widget's store, so also
+    // react to its own signal in case the widget event does not reach us.
+    window.addEventListener(IDENTITY_SESSION_EVENT, handleLogin);
 
     const { data: supabaseAuthListener } = supabase.auth.onAuthStateChange((event) => {
       if (!active) return;
@@ -148,6 +209,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       active = false;
       netlifyIdentity.off('logout', handleLogout);
       netlifyIdentity.off('login', handleLogin);
+      window.removeEventListener(IDENTITY_SESSION_EVENT, handleLogin);
       supabaseAuthListener.subscription.unsubscribe();
     };
   }, []);
@@ -352,26 +414,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!state.currentUserId) return;
     let cancelled = false;
-    const verify = () => {
-      loadSessionUser()
-        .then((user) => {
-          if (cancelled) return;
-          if (user) dispatch({ type: 'SIGN_IN', user });
-          else {
-            dispatch({ type: 'SIGN_OUT' });
-            try {
-              netlifyIdentity.logout();
-            } catch {
-              // Safe fallback
-            }
-          }
-        })
-        .catch((error) => console.error('Failed to verify session', error));
+    const verify = async () => {
+      // Only a member who still holds a token has anything to revalidate.
+      if (!hasStoredSession()) return;
+      const accessToken = await currentAccessToken();
+      if (cancelled) return;
+      if (!accessToken) {
+        dispatch({ type: 'SIGN_OUT' });
+        try {
+          netlifyIdentity.logout();
+        } catch {
+          // Safe fallback
+        }
+        return;
+      }
+
+      const user = await loadSessionUser(accessToken);
+      if (cancelled) return;
+      if (user) dispatch({ type: 'SIGN_IN', user });
+      else {
+        dispatch({ type: 'SIGN_OUT' });
+        try {
+          netlifyIdentity.logout();
+        } catch {
+          // Safe fallback
+        }
+      }
     };
-    const interval = setInterval(verify, 15000);
+    // Skip the check entirely while the tab is in the background, and let a
+    // transient failure pass without disturbing the signed-in session.
+    const stop = startVisiblePolling(verify, {
+      intervalMs: SESSION_REVALIDATE_MS,
+      // The account was just loaded to reach this state; no need to ask again.
+      immediate: false,
+      onError: (error) => console.error('Failed to verify session', error),
+    });
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      stop();
     };
   }, [state.currentUserId]);
 

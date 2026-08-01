@@ -174,7 +174,7 @@ async function youtubePreview(url: URL): Promise<LinkPreview | null> {
 }
 
 export default async (req: Request) => {
-  const actor = await requireAppUser();
+  const actor = await requireAppUser(req);
   if (isResponse(actor)) return actor;
   if (req.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
 
