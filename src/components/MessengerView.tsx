@@ -7,7 +7,6 @@ import {
   Image,
   MessageCircle,
   Mic,
-  Paperclip,
   Send,
   Square,
   ThumbsUp,
@@ -372,12 +371,15 @@ export function MessengerView() {
     if (!activeThread || uploading || recording) return;
     const roomId = createMeetingId();
     const title = me ? `Video call with ${me.name}` : 'Video call';
-<<<<<<< HEAD
-    const startedAt = Date.now();
-    state.sendMessage(activeThread.id, encodeChatInvite({ roomId, title, hostId: me?.id, startedAt }));
-    // The chat invite is the durable record of the call, but it is only seen by
-    // someone already looking at this thread. Ringing the other member in real
-    // time is what actually reaches them, wherever they are in the app.
+    
+    // Play outbound audio locally for caller
+    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3');
+    audio.play().catch(() => {});
+
+    // Send call invite to chat thread
+    state.sendMessage(activeThread.id, encodeChatInvite({ roomId, title, hostId: me?.id }));
+    
+    // Publish real-time signaling event to trigger receiver ringtone & overlay
     if (activeFriend) {
       publishIncomingCall(activeFriend.id, {
         roomId,
@@ -386,21 +388,13 @@ export function MessengerView() {
         callerName: me.name,
         callerPhoto: me.photo,
         threadId: activeThread.id,
-        startedAt,
+        startedAt: Date.now(),
       });
     }
-=======
-    
-    // Play outbound ringtone sound locally for caller
-    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3');
-    audio.play().catch(() => {});
 
-    state.sendMessage(activeThread.id, encodeChatInvite({ roomId, title, hostId: me?.id, startedAt: Date.now() }));
->>>>>>> 1faca1c (fix: update full meetings utility and Messenger view)
     openMeeting(roomId, title);
   };
 
-  /** Join a call already invited to in this thread — the same room, not a new one. */
   const joinCall = (roomId: string, title: string) => openMeeting(roomId, title);
 
   const openConversation = (threadId: string, friendId: string) => {
@@ -499,11 +493,7 @@ export function MessengerView() {
                             </div>
                           </div>
                           <button
-<<<<<<< HEAD
                             onClick={() => joinCall(invite.roomId, invite.title)}
-=======
-                            onClick={startVideoCall}
->>>>>>> 1faca1c (fix: update full meetings utility and Messenger view)
                             className="w-full rounded-xl bg-white dark:bg-gray-700 py-2 text-center text-sm font-semibold text-black dark:text-white shadow-sm transition hover:bg-gray-50"
                           >
                             Join call
