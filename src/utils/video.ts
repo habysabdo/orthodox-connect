@@ -6,8 +6,7 @@ import { bunnyEmbedUrl, bunnyHlsUrl } from './bunny';
  * - `mux`     → a Mux-hosted stream, played with <MuxPlayer> (adaptive HLS,
  *               works on every device including iOS Safari).
  * - `direct`  → a direct file or Bunny adaptive HLS stream played in an HTML5 <video> element.
- * - `embed`   → a known platform (YouTube/Vimeo) rendered in a provider iframe.
- * - `link-preview` → a provider such as Facebook that should open externally.
+ * - `embed`   → a known platform (YouTube/Vimeo/Facebook) rendered in a provider iframe.
  * - `iframe`  → any other external link, resolved into a preview card.
  * - `invalid` → the value is not a usable URL; callers should show the fallback link.
  */
@@ -16,7 +15,7 @@ export type VideoSource =
   | { kind: 'direct'; url: string; mimeType: string }
   | { kind: 'embed'; provider: 'youtube'; videoId: string; embedUrl: string; originalUrl: string }
   | { kind: 'embed'; provider: 'vimeo'; embedUrl: string; originalUrl: string }
-  | { kind: 'link-preview'; provider: 'facebook'; originalUrl: string }
+  | { kind: 'embed'; provider: 'facebook'; embedUrl: string; originalUrl: string }
   | { kind: 'hosted-iframe'; embedUrl: string; originalUrl: string }
   | { kind: 'iframe'; embedUrl: string; originalUrl: string }
   | { kind: 'invalid'; originalUrl: string };
@@ -85,6 +84,17 @@ function directVideoExtension(url: URL): string | null {
 
 const YOUTUBE_VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
 
+/**
+ * Reduce a raw path segment or `v=` value to the bare 11-character video id.
+ * Share links carry trailing junk (`abc123XYZ_1?si=…`, `abc123XYZ_1&t=30`) that
+ * would otherwise fail the strict length check.
+ */
+function normalizeYouTubeId(candidate: string | null | undefined): string | null {
+  if (!candidate) return null;
+  const bare = candidate.split(/[?&#]/)[0].slice(0, 11);
+  return YOUTUBE_VIDEO_ID_PATTERN.test(bare) ? bare : null;
+}
+
 export function extractYouTubeVideoId(raw: string | undefined | null): string | null {
   if (!raw) return null;
   const url = normalizeUrl(raw);
@@ -109,7 +119,7 @@ export function extractYouTubeVideoId(raw: string | undefined | null): string | 
     if (['embed', 'shorts', 'v', 'live'].includes(segments[0])) candidate = segments[1] ?? null;
   }
 
-  return candidate && YOUTUBE_VIDEO_ID_PATTERN.test(candidate) ? candidate : null;
+  return normalizeYouTubeId(candidate);
 }
 
 function vimeoId(url: URL): string | null {
@@ -140,6 +150,11 @@ function isFacebookVideoUrl(url: URL): boolean {
     /\/(?:videos?|reels?)(?:\/|$)/.test(pathname) ||
     /\/share\/(?:v|r)(?:\/|$)/.test(pathname)
   );
+}
+
+/** Builds the Facebook video plugin URL used to embed a post inline. */
+export function facebookEmbedUrl(videoUrl: string): string {
+  return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(videoUrl)}&show_text=false&width=560`;
 }
 
 const TEXT_URL_PATTERN = /(?:https?:\/\/|www\.|(?:youtube\.com|youtu\.be|facebook\.com|fb\.watch|fb\.com)\/)[^\s<>]+/gi;
@@ -288,8 +303,9 @@ export function parseVideoSource(raw: string | undefined | null): VideoSource {
 
   if (isFacebookVideoUrl(url)) {
     return {
-      kind: 'link-preview',
+      kind: 'embed',
       provider: 'facebook',
+      embedUrl: facebookEmbedUrl(url.toString()),
       originalUrl: url.toString(),
     };
   }

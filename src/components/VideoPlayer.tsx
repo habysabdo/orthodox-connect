@@ -202,7 +202,7 @@ function VideoUnavailable({ className, onRetry }: { className: string; onRetry?:
   );
 }
 
-const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { source: Extract<VideoSource, { kind: 'embed' | 'iframe' | 'link-preview' }> }>(function ExternalVideoPlayer({
+const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { source: Extract<VideoSource, { kind: 'embed' | 'iframe' }> }>(function ExternalVideoPlayer({
   source,
   className = '',
   controls = true,
@@ -217,30 +217,26 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
   const [loading, setLoading] = useState(source.kind === 'iframe');
   const [iframeFailed, setIframeFailed] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const iframeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const youTubePlayerRef = useRef<YouTubePlayer | null>(null);
 
-  const initialProvider = source.kind === 'embed' || source.kind === 'link-preview' ? source.provider : 'external';
+  const initialProvider = source.kind === 'embed' ? source.provider : 'external';
   const resolvedSource = useMemo(
     () => parseVideoSource(preview?.resolvedUrl || source.originalUrl),
     [preview?.resolvedUrl, source.originalUrl],
   );
-  const provider = resolvedSource.kind === 'embed' || resolvedSource.kind === 'link-preview'
-    ? resolvedSource.provider
-    : preview?.provider || initialProvider;
+  // Always prefer a real embed: the resolved (redirect-followed) URL when it is
+  // still embeddable, otherwise the embed we already classified from the raw URL.
+  const embedSource = resolvedSource.kind === 'embed'
+    ? resolvedSource
+    : source.kind === 'embed' ? source : null;
+  const provider = embedSource?.provider ?? preview?.provider ?? initialProvider;
+  const embedUrlValue = embedSource?.embedUrl ?? null;
   const externalUrl = preview?.resolvedUrl || source.originalUrl;
   const needsPreview = source.kind === 'iframe';
 
-  const clearIframeTimeout = useCallback(() => {
-    if (iframeTimeoutRef.current === null) return;
-    clearTimeout(iframeTimeoutRef.current);
-    iframeTimeoutRef.current = null;
-  }, []);
-
   const handleIframeFailure = useCallback(() => {
-    clearIframeTimeout();
     setIframeFailed(true);
-  }, [clearIframeTimeout]);
+  }, []);
 
   useEffect(() => {
     setPreview(null);
@@ -260,18 +256,8 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
     return () => controller.abort();
   }, [needsPreview, source.originalUrl]);
 
-  const canEmbed = resolvedSource.kind === 'embed';
-
   useEffect(() => {
-    clearIframeTimeout();
-    if (!canEmbed || iframeFailed) return;
-
-    iframeTimeoutRef.current = setTimeout(handleIframeFailure, 12_000);
-    return clearIframeTimeout;
-  }, [canEmbed, clearIframeTimeout, handleIframeFailure, iframeFailed]);
-
-  useEffect(() => {
-    if (!canEmbed || resolvedSource.kind !== 'embed' || resolvedSource.provider !== 'youtube' || !iframeRef.current) return;
+    if (provider !== 'youtube' || !embedUrlValue || !iframeRef.current) return;
     let disposed = false;
 
     void loadYouTubeApi()
@@ -300,7 +286,7 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
       youTubePlayerRef.current?.destroy();
       youTubePlayerRef.current = null;
     };
-  }, [autoPlay, canEmbed, handleIframeFailure, muted, onAutoPlayBlocked, onPlay, resolvedSource]);
+  }, [autoPlay, embedUrlValue, handleIframeFailure, muted, onAutoPlayBlocked, onPlay, provider]);
 
   useEffect(() => {
     const player = youTubePlayerRef.current;
@@ -342,22 +328,24 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
     );
   }
 
-  if (iframeFailed || !canEmbed || resolvedSource.kind !== 'embed') {
+  // Fallback cards only appear once the iframe itself reports an error, or when
+  // the link is not embeddable at all.
+  if (iframeFailed || !embedSource) {
     return <LinkPreviewCard url={externalUrl} preview={preview} provider={provider} className={className} />;
   }
 
-  const embedUrl = buildEmbedUrl(resolvedSource.embedUrl);
+  const embedUrl = buildEmbedUrl(embedSource.embedUrl);
   if (!embedUrl) {
     return <LinkPreviewCard url={externalUrl} preview={preview} provider={provider} className={className} />;
   }
-  if (resolvedSource.provider === 'youtube') {
+  if (embedSource.provider === 'youtube') {
     embedUrl.searchParams.set('enablejsapi', '1');
     embedUrl.searchParams.set('origin', window.location.origin);
     embedUrl.searchParams.set('controls', controls ? '1' : '0');
     embedUrl.searchParams.set('autoplay', autoPlay ? '1' : '0');
     embedUrl.searchParams.set('mute', muted ? '1' : '0');
     if (loop) embedUrl.searchParams.set('loop', '1');
-    if (loop) embedUrl.searchParams.set('playlist', resolvedSource.videoId);
+    if (loop) embedUrl.searchParams.set('playlist', embedSource.videoId);
   }
 
   return (
@@ -370,7 +358,6 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
         allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
         allowFullScreen={true}
         referrerPolicy="strict-origin-when-cross-origin"
-        onLoad={clearIframeTimeout}
         onError={handleIframeFailure}
         className="absolute inset-0 h-full w-full border-0"
       />
@@ -378,7 +365,7 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
   );
 });
 
-const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { source: Exclude<VideoSource, { kind: 'embed' | 'iframe' | 'link-preview' }> }>(function HostedVideoPlayer({
+const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { source: Exclude<VideoSource, { kind: 'embed' | 'iframe' }> }>(function HostedVideoPlayer({
   source,
   url,
   className = '',
@@ -672,7 +659,7 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
 
 export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function VideoPlayer(props, ref) {
   const source = parseVideoSource(props.url);
-  if (source.kind === 'embed' || source.kind === 'iframe' || source.kind === 'link-preview') {
+  if (source.kind === 'embed' || source.kind === 'iframe') {
     return <ExternalVideoPlayer ref={ref} {...props} source={source} />;
   }
   return <HostedVideoPlayer ref={ref} {...props} source={source} />;
