@@ -212,13 +212,16 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
 }, ref) {
   const initialProvider = source.kind === 'embed' ? source.provider : 'external';
 
-  // YouTube and Vimeo embed straight from the parsed URL. Only Facebook videos
-  // and unknown links need `/api/link-preview` to decide whether an iframe is
-  // possible at all. YouTube used to wait on that call too and treat any error
-  // from it as "not embeddable", so a slow, rate-limited or unauthenticated
-  // metadata request silently downgraded every YouTube post to a link card.
-  const embedsWithoutPreview = initialProvider === 'youtube' || initialProvider === 'vimeo';
-  const needsPreview = !embedsWithoutPreview && (source.kind === 'iframe' || initialProvider === 'facebook');
+  // Every provider we recognise has an official embed — a YouTube or Vimeo
+  // iframe, or Facebook's `plugins/video.php` player — so a recognised link is
+  // framed straight from the parsed URL. Only an unknown link needs
+  // `/api/link-preview`, to find out whether it resolves to something
+  // embeddable and to build a link card when it does not. YouTube and Facebook
+  // both used to wait on that call and treat any error from it as "not
+  // embeddable", so a slow, rate-limited or Facebook-blocked metadata request
+  // silently downgraded a perfectly playable video to a black link card reading
+  // "this video is available on the original site".
+  const needsPreview = source.kind === 'iframe';
 
   const [preview, setPreview] = useState<LinkPreview | null>(null);
   const [loading, setLoading] = useState(needsPreview);
@@ -226,9 +229,14 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const youTubePlayerRef = useRef<YouTubePlayer | null>(null);
 
+  // Only an unknown link is re-parsed against where the preview says it actually
+  // resolves to (a shortener can land on a real video page). A recognised embed
+  // is re-parsed from its own URL, which is deterministic, so the iframe's `src`
+  // never changes mid-playback.
+  const previewUrl = source.kind === 'iframe' ? preview?.resolvedUrl : undefined;
   const resolvedSource = useMemo(
-    () => parseVideoSource(preview?.resolvedUrl || source.originalUrl),
-    [preview?.resolvedUrl, source.originalUrl],
+    () => parseVideoSource(previewUrl || source.originalUrl),
+    [previewUrl, source.originalUrl],
   );
   const provider = resolvedSource.kind === 'embed' ? resolvedSource.provider : initialProvider;
   const externalUrl = preview?.resolvedUrl || source.originalUrl;
@@ -255,9 +263,10 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
     return () => controller.abort();
   }, [needsPreview, source.originalUrl]);
 
-  const canEmbed = resolvedSource.kind === 'embed' && (
-    resolvedSource.provider === 'youtube' || resolvedSource.provider === 'vimeo' || Boolean(preview?.embeddable)
-  );
+  // An embed URL from a provider we recognise is playable on its own terms; the
+  // provider's player reports its own problems inside the frame, and `failed`
+  // below still falls back to a link card.
+  const canEmbed = resolvedSource.kind === 'embed' && Boolean(resolvedSource.embedUrl);
 
   useEffect(() => {
     if (!canEmbed || resolvedSource.kind !== 'embed' || resolvedSource.provider !== 'youtube' || !iframeRef.current) return;
@@ -352,7 +361,7 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
   }
 
   return (
-    <div className={`relative overflow-hidden bg-black ${fill ? 'h-full w-full' : 'aspect-video w-full rounded-lg'} ${className}`}>
+    <div className={`relative overflow-hidden bg-black ${fill ? 'h-full w-full' : 'aspect-video w-full rounded-xl'} ${className}`}>
       <iframe
         ref={iframeRef}
         src={embedUrl.toString()}
@@ -606,7 +615,7 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
       // Safe fallback
     }
     return (
-      <div className={`relative overflow-hidden bg-black ${fill ? 'h-full w-full' : 'aspect-video w-full rounded-lg'} ${className}`}>
+      <div className={`relative overflow-hidden bg-black ${fill ? 'h-full w-full' : 'aspect-video w-full rounded-xl'} ${className}`}>
         <iframe
           ref={hostedIframeRef}
           src={playerUrl}
@@ -662,6 +671,14 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const source = parseVideoSource(props.url);
   if (source.kind === 'embed' || source.kind === 'iframe') {
     return <ExternalVideoPlayer ref={ref} {...props} source={source} />;
+  }
+  // A stored value that is not a usable URL has nothing to play. Handing it to a
+  // <video> element renders a black player with a broken timeline, so say so
+  // instead — or render nothing at all when the field is simply empty.
+  if (source.kind === 'invalid') {
+    return source.originalUrl
+      ? <VideoUnavailable className={props.className ?? ''} />
+      : <div className={props.className} aria-hidden="true" />;
   }
   return <HostedVideoPlayer ref={ref} {...props} source={source} />;
 });
