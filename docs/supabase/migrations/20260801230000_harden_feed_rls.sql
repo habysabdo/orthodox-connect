@@ -1,5 +1,4 @@
--- Reference copy of the Supabase-only native feed migration.
--- Canonical migration: migrations/20260801230000_harden_feed_rls.sql
+-- Supabase-only migration for a native public.posts/public.profiles feed.
 -- Do not place this file in netlify/database/migrations: auth.uid() and the
 -- supabase_realtime publication belong to the Supabase project database.
 

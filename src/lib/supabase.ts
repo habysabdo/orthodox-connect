@@ -20,14 +20,14 @@ if (!hasSupabaseConfig) {
 const clientUrl = hasSupabaseConfig ? (SUPABASE_URL as string) : 'https://placeholder.supabase.co';
 const clientAnonKey = hasSupabaseConfig ? SUPABASE_ANON_KEY : 'public-anon-key';
 
-// A single shared browser client. `persistSession` + `autoRefreshToken` (both
-// on by default) store the session in localStorage and refresh it in the
-// background, which is what keeps the user signed in across page reloads.
+// A single shared browser client. Keep these auth options explicit because the
+// app runs in browsers, Netlify deploy previews, and Capacitor WebViews where
+// implicit defaults have historically produced inconsistent session restores.
 export const supabase = createClient(clientUrl, clientAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true,
+    detectSessionInUrl: false,
     storage: window.localStorage,
   },
 });

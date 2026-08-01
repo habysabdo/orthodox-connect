@@ -70,28 +70,29 @@ export function useFeed() {
     void loadFeed();
 
     channel = supabase
-      .channel('orthodoxconnect-feed-posts')
+      .channel('public:posts')
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'posts' },
         async (payload) => {
-          const insertedId = typeof payload.new.id === 'string' ? payload.new.id : null;
-          if (!active || !insertedId) return;
+          try {
+            const insertedId = typeof payload.new.id === 'string' ? payload.new.id : null;
+            if (!active || !insertedId) return;
 
-          const { data, error: queryError } = await supabase
-            .from('posts')
-            .select(FEED_SELECT)
-            .eq('id', insertedId)
-            .single();
+            const { data, error: queryError } = await supabase
+              .from('posts')
+              .select(FEED_SELECT)
+              .eq('id', insertedId)
+              .single();
 
-          if (!active) return;
-          if (queryError) {
-            setError(queryError.message);
-            return;
+            if (!active) return;
+            if (queryError) throw queryError;
+
+            const newPost = normalizePost(data);
+            setPosts((current) => [newPost, ...current.filter((post) => post.id !== newPost.id)]);
+          } catch (subscriptionError) {
+            if (active) setError(errorMessage(subscriptionError));
           }
-
-          const newPost = normalizePost(data);
-          setPosts((current) => [newPost, ...current.filter((post) => post.id !== newPost.id)]);
         },
       )
       .subscribe((status) => {

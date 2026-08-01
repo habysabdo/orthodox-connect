@@ -39,7 +39,9 @@ if (empty) return <EmptyFeed />;
 return posts.map((post) => <PostCard key={post.id} post={post} />);
 ```
 
-The hook loads newest posts first, joins `profiles:user_id(id, full_name, avatar_url)`, and subscribes to `INSERT` events. It re-fetches each inserted row so the live item includes its author profile before being prepended.
+The hook loads newest posts first, joins `profiles:user_id(id, full_name, avatar_url)`, and subscribes to `INSERT` events through `supabase.channel('public:posts')`. It re-fetches each inserted row so the live item includes its author profile before being prepended.
+
+Apply `docs/supabase/migrations/20260801230000_harden_feed_rls.sql` to the Supabase project only if this optional native feed is enabled. The migration must not be moved into `netlify/database/migrations`, because that directory is applied to the production Netlify Database schema.
 
 ## Netlify environment
 
