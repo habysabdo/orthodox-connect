@@ -14,7 +14,6 @@ const TOOLBAR_BUTTONS = [
   'raisehand',
   'tileview',
   'hangup',
-  'sharetimesheet',
 ];
 
 function MeetingSpinner() {
@@ -103,32 +102,24 @@ export function MeetingView() {
       <div className="min-h-0 flex-1">
         <JitsiMeeting
           domain={JITSI_DOMAIN}
+          // CRITICAL: Force the script to load from meet.jit.si instead of 8x8.vc
+          scriptUrl="https://meet.jit.si/external_api.js"
           roomName={jitsiRoomName(roomId)}
           userInfo={{
             displayName: me?.name || 'Community Member',
             email: me?.email || '',
           }}
           configOverwrite={{
-            // Members are already signed in to OrthodoxConnect, so the prejoin
-            // screen and the lobby only add a "Asking to join meeting / Log-in
-            // to become a moderator" wall between them and the prayer room.
-            // `prejoinConfig` is the current key; `prejoinPageEnabled` is kept
-            // for older Jitsi deployments.
             prejoinPageEnabled: false,
             prejoinConfig: { enabled: false },
             disableDeepLinking: true,
             startWithAudioMuted: false,
             startWithVideoMuted: false,
-            // The lobby is off entirely, so nobody is held on a knock screen
-            // waiting to be admitted. With no lobby there is nothing to knock
-            // at, which is why auto-knocking is off too.
             enableLobby: false,
             autoKnockLobby: false,
             enableLobbyChat: false,
             lobby: { autoKnock: false, enableChat: false },
             hideLobbyButton: true,
-            // Everyone joins as an ordinary participant: no token roles, no
-            // moderator log-in prompt, and no display-name gate on the way in.
             enableUserRolesBasedOnToken: false,
             requireDisplayName: false,
             disableModeratorIndicator: true,
@@ -140,15 +131,10 @@ export function MeetingView() {
             SHOW_WATERMARK_FOR_GUESTS: false,
             DEFAULT_BACKGROUND: '#090d12',
             MOBILE_APP_PROMO: false,
-            // Older deployments read this flag when deciding whether to offer
-            // the "Log-in to become a moderator" dialog.
             AUTHENTICATION_ENABLE: false,
           }}
           spinner={MeetingSpinner}
           onApiReady={(api) => {
-            // Display name and email travel in `userInfo`; the profile photo has
-            // to be pushed over the external API, which is what puts a member's
-            // real avatar on their tile instead of a generated initial.
             if (me?.photo) api.executeCommand('avatarUrl', me.photo);
             if (heading) api.executeCommand('subject', heading);
           }}
