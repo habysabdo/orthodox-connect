@@ -207,8 +207,11 @@ html.theme-transition * {
   }
 }
 
-/* Forcefully hide default Netlify Identity modal iframe overlay */
+/* Forcefully hide default Netlify Identity modal iframe overlay.
+   The widget mounts its iframe as #netlify-identity-widget with src="about:blank",
+   so that id has to be listed explicitly — the other selectors never match it. */
 #netlify-modal-assembly,
+#netlify-identity-widget,
 .netlify-identity-widget,
 iframe[src*="netlify-identity-widget"] {
   display: none !important;
