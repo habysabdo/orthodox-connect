@@ -6,15 +6,17 @@ import { bunnyEmbedUrl, bunnyHlsUrl } from './bunny';
  * - `mux`     → a Mux-hosted stream, played with <MuxPlayer> (adaptive HLS,
  *               works on every device including iOS Safari).
  * - `direct`  → a direct file or Bunny adaptive HLS stream played in an HTML5 <video> element.
- * - `embed`   → a known platform (YouTube/Facebook/Vimeo) rendered in a provider iframe.
- * - `iframe`  → any other external link, rendered in a generic iframe.
+ * - `embed`   → a known platform (YouTube/Vimeo) rendered in a provider iframe.
+ * - `link-preview` → a provider such as Facebook that should open externally.
+ * - `iframe`  → any other external link, resolved into a preview card.
  * - `invalid` → the value is not a usable URL; callers should show the fallback link.
  */
 export type VideoSource =
   | { kind: 'mux'; playbackId: string; originalUrl: string }
   | { kind: 'direct'; url: string; mimeType: string }
   | { kind: 'embed'; provider: 'youtube'; videoId: string; embedUrl: string; originalUrl: string }
-  | { kind: 'embed'; provider: 'facebook' | 'vimeo'; embedUrl: string; originalUrl: string }
+  | { kind: 'embed'; provider: 'vimeo'; embedUrl: string; originalUrl: string }
+  | { kind: 'link-preview'; provider: 'facebook'; originalUrl: string }
   | { kind: 'hosted-iframe'; embedUrl: string; originalUrl: string }
   | { kind: 'iframe'; embedUrl: string; originalUrl: string }
   | { kind: 'invalid'; originalUrl: string };
@@ -136,7 +138,7 @@ function isFacebookVideoUrl(url: URL): boolean {
     (/^\/watch\/?$/.test(pathname) && url.searchParams.has('v')) ||
     pathname === '/video.php' ||
     /\/(?:videos?|reels?)(?:\/|$)/.test(pathname) ||
-    /\/share\/v(?:\/|$)/.test(pathname)
+    /\/share\/(?:v|r)(?:\/|$)/.test(pathname)
   );
 }
 
@@ -265,12 +267,11 @@ export function parseVideoSource(raw: string | undefined | null): VideoSource {
 
   const yt = extractYouTubeVideoId(original);
   if (yt) {
-    const origin = typeof window !== 'undefined' ? window.location?.origin : '';
     return {
       kind: 'embed',
       provider: 'youtube',
       videoId: yt,
-      embedUrl: `https://www.youtube-nocookie.com/embed/${yt}?enablejsapi=1&origin=${encodeURIComponent(origin)}`,
+      embedUrl: `https://www.youtube-nocookie.com/embed/${yt}`,
       originalUrl: url.toString(),
     };
   }
@@ -286,12 +287,10 @@ export function parseVideoSource(raw: string | undefined | null): VideoSource {
   }
 
   if (isFacebookVideoUrl(url)) {
-    const facebookUrl = url.toString();
     return {
-      kind: 'embed',
+      kind: 'link-preview',
       provider: 'facebook',
-      embedUrl: `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(facebookUrl)}&show_text=false&appId=&parent=${window.location.hostname}`,
-      originalUrl: facebookUrl,
+      originalUrl: url.toString(),
     };
   }
 
