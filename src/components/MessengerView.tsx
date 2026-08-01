@@ -14,10 +14,13 @@ import {
   Trash2,
   Video,
   X,
+  Plus,
+  Camera,
+  Smile,
+  PhoneCall,
 } from 'lucide-react';
 import { Avatar, EmptyState } from './ui';
 import { ChatAudioPlayer } from './ChatAudioPlayer';
-import { MeetingInviteCard } from './MeetingInviteCard';
 import { useStore, friendsOf, threadIdFor, unreadCountFor } from '@/store/context';
 import type { ChatAttachment, ChatMessage, User } from '@/types';
 import { useUI } from '@/store/ui';
@@ -79,7 +82,7 @@ async function handleDownloadPhoto(photoUrl: string, fileName?: string): Promise
 function MessageAttachment({ attachment }: { attachment: ChatAttachment }) {
   if (attachment.kind === 'image') {
     return (
-      <div className="group relative overflow-hidden rounded-xl">
+      <div className="group relative overflow-hidden rounded-2xl">
         <a href={attachment.url} target="_blank" rel="noreferrer" className="block">
           <img
             src={attachment.url}
@@ -91,11 +94,11 @@ function MessageAttachment({ attachment }: { attachment: ChatAttachment }) {
         <button
           type="button"
           onClick={() => void handleDownloadPhoto(attachment.url, attachment.name)}
-          className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full bg-ink-950/80 text-white opacity-100 shadow-lg backdrop-blur transition hover:bg-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-300 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white opacity-100 shadow backdrop-blur transition hover:bg-black/80 sm:opacity-0 sm:group-hover:opacity-100"
           title={`Download ${attachment.name}`}
           aria-label={`Download ${attachment.name}`}
         >
-          <Download size={17} aria-hidden="true" />
+          <Download size={15} aria-hidden="true" />
         </button>
       </div>
     );
@@ -108,7 +111,7 @@ function MessageAttachment({ attachment }: { attachment: ChatAttachment }) {
   return (
     <a
       href={`${attachment.url}&download=1`}
-      className="flex min-w-52 items-center gap-3 rounded-xl bg-black/10 px-3 py-2.5 hover:bg-black/15"
+      className="flex min-w-52 items-center gap-3 rounded-2xl bg-black/5 dark:bg-white/10 px-3 py-2.5 hover:bg-black/10"
     >
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-current/10">
         <FileIcon size={18} />
@@ -123,24 +126,11 @@ function MessageAttachment({ attachment }: { attachment: ChatAttachment }) {
 }
 
 function MessageStatus({ message, mine }: { message: ChatMessage; mine: boolean }) {
-  if (!mine) {
-    return <span>{message.isRead ? 'Read' : 'Unread'}</span>;
-  }
-
+  if (!mine) return null;
   if (message.isRead) {
-    return (
-      <span className="inline-flex items-center gap-1 text-sky-300">
-        <CheckCheck size={12} aria-hidden="true" />
-        {message.readAt ? `Read at ${clockTime(message.readAt)}` : 'Read'}
-      </span>
-    );
+    return <CheckCheck size={14} className="text-blue-500" aria-hidden="true" />;
   }
-
-  return (
-    <span className="inline-flex items-center gap-1">
-      <Check size={12} aria-hidden="true" /> Sent
-    </span>
-  );
+  return <Check size={14} className="text-gray-400" aria-hidden="true" />;
 }
 
 export function MessengerView() {
@@ -217,12 +207,13 @@ export function MessengerView() {
     };
   }, [activeThreadId, activeThreadMessageCount, markThreadRead]);
 
+  // Dynamic textarea height tracking
   useEffect(() => {
     const textarea = messageInputRef.current;
     if (!textarea) return;
     textarea.style.height = 'auto';
-    const maxHeight = 144;
-    textarea.style.height = `${Math.max(72, Math.min(textarea.scrollHeight, maxHeight))}px`;
+    const maxHeight = 100;
+    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
     textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
   }, [draft]);
 
@@ -239,8 +230,8 @@ export function MessengerView() {
 
   if (!me) {
     return (
-      <div className="card flex min-h-48 items-center justify-center px-6 text-center text-sm text-ink-400">
-        Your messaging profile is still loading. Please try again in a moment.
+      <div className="card flex min-h-48 items-center justify-center px-6 text-center text-sm text-gray-400">
+        Your messaging profile is loading...
       </div>
     );
   }
@@ -274,7 +265,7 @@ export function MessengerView() {
 
   const startRecording = async () => {
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-      setComposerError('Voice recording is not supported in this browser.');
+      setComposerError('Voice recording is not supported.');
       return;
     }
     try {
@@ -299,7 +290,7 @@ export function MessengerView() {
         if (discardRecordingRef.current) return;
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
         if (!blob.size) {
-          setComposerError('No audio was captured. Please try again.');
+          setComposerError('No audio captured.');
           return;
         }
         setPendingVoice({
@@ -316,9 +307,7 @@ export function MessengerView() {
       }, 1000);
     } catch (error) {
       stopStream();
-      setComposerError(error instanceof DOMException && error.name === 'NotAllowedError'
-        ? 'Microphone access was denied.'
-        : 'Unable to start voice recording.');
+      setComposerError('Microphone access denied.');
     }
   };
 
@@ -367,7 +356,7 @@ export function MessengerView() {
       setDraft('');
       clearPending();
     } catch (error) {
-      setComposerError(error instanceof Error ? error.message : 'Unable to send attachments.');
+      setComposerError(error instanceof Error ? error.message : 'Unable to send message.');
     } finally {
       setUploading(false);
     }
@@ -378,15 +367,15 @@ export function MessengerView() {
     state.sendMessage(activeThread.id, '👍');
   };
 
-  /**
-   * Start a video call for this conversation: the invite card is posted into the
-   * thread, and the caller is dropped straight into the room so the other member
-   * finds someone waiting when they tap Join.
-   */
   const startVideoCall = () => {
     if (!activeThread || uploading || recording) return;
     const roomId = createMeetingId();
     const title = me ? `Video call with ${me.name}` : 'Video call';
+    
+    // Play outbound ringtone sound locally for caller
+    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3');
+    audio.play().catch(() => {});
+
     state.sendMessage(activeThread.id, encodeChatInvite({ roomId, title, hostId: me?.id, startedAt: Date.now() }));
     openMeeting(roomId, title);
   };
@@ -397,97 +386,117 @@ export function MessengerView() {
   };
 
   return (
-    <div className="card flex h-[calc(100vh-7rem)] overflow-hidden">
-      <div className={`flex w-full flex-col border-r border-ink-700 md:w-80 ${activeThread ? 'hidden md:flex' : 'flex'}`}>
-        <div className="border-b border-ink-700 p-4">
-          <h1 className="flex items-center gap-2 font-serif text-xl font-semibold">
-            <MessageCircle size={20} className="text-gold-300" /> Messages
+    <div className="flex h-[calc(100vh-6rem)] bg-white dark:bg-slate-950 overflow-hidden font-sans">
+      
+      {/* Conversations Left Sidebar */}
+      <div className={`flex w-full flex-col border-r border-gray-200 dark:border-gray-800 md:w-80 ${activeThread ? 'hidden md:flex' : 'flex'}`}>
+        <div className="border-b border-gray-100 dark:border-gray-800 p-4">
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900 dark:text-white">
+            Chats
           </h1>
-          <p className="mt-1 text-xs text-ink-400">{unreadCountFor(state, me.id)} unread</p>
+          <p className="mt-1 text-xs text-gray-500">{unreadCountFor(state, me.id)} unread</p>
         </div>
-        <div className="flex-1 overflow-y-auto scrollbar-thin">
+        <div className="flex-1 overflow-y-auto">
           {conversations.length === 0 ? (
-            <div className="p-6 text-center text-sm text-ink-400">No conversations yet. Add friends to start messaging.</div>
+            <div className="p-6 text-center text-sm text-gray-400">No conversations yet.</div>
           ) : conversations.map(({ friend, last, unread, threadId }) => (
             <button
               key={friend.id}
               onClick={() => openConversation(threadId, friend.id)}
-              className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-ink-800 ${
-                openThreadId === threadId ? 'bg-ink-800 shadow-[inset_3px_0_0_0_#d4af37]' : ''
+              className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-900 ${
+                openThreadId === threadId ? 'bg-gray-100 dark:bg-gray-800' : ''
               }`}
             >
-              <Avatar src={userPhoto(friend)} name={userName(friend)} size={44} online={friend.online} ring="gold" />
+              <Avatar src={userPhoto(friend)} name={userName(friend)} size={48} online={friend.online} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-sm font-semibold text-ink-100">{userName(friend)}</span>
-                  {last && <span className="shrink-0 text-[10px] text-ink-400">{timeAgo(last.createdAt ?? 0)}</span>}
+                  <span className="truncate text-sm font-semibold text-gray-900 dark:text-white">{userName(friend)}</span>
+                  {last && <span className="shrink-0 text-[11px] text-gray-400">{timeAgo(last.createdAt ?? 0)}</span>}
                 </div>
-                <div className={`truncate text-xs ${unread ? 'font-semibold text-gold-200' : 'text-ink-400'}`}>
+                <div className={`truncate text-xs ${unread ? 'font-bold text-black dark:text-white' : 'text-gray-500'}`}>
                   {last ? `${last.senderId === me.id ? 'You: ' : ''}${messageSummary(last)}` : messageSummary()}
                 </div>
               </div>
               {unread > 0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gold-400 px-1.5 text-[11px] font-bold text-[#17130a]">{unread}</span>
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[11px] font-bold text-white">{unread}</span>
               )}
             </button>
           ))}
         </div>
       </div>
 
+      {/* Active Conversation Area */}
       {activeThread && activeFriend ? (
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-center gap-3 border-b border-ink-700 p-3">
-            <button onClick={() => setOpenThreadId(null)} className="ghost-btn p-2 md:hidden" aria-label="Back to conversations">
-              <MessageCircle size={16} />
-            </button>
-            <Avatar src={userPhoto(activeFriend)} name={activeFriendName} size={40} online={activeFriend.online} ring="gold" />
-            <div className="min-w-0 flex-1">
-              <div className="truncate font-semibold text-ink-100">{activeFriendName}</div>
-              <div className="flex items-center gap-1.5 text-xs">
-                <span className={`h-1.5 w-1.5 rounded-full ${activeFriend.online ? 'bg-emerald-400' : 'bg-ink-400'}`} />
-                <span className={activeFriend.online ? 'text-emerald-300' : 'text-ink-400'}>{activeFriend.online ? 'Active now' : 'Offline'}</span>
+        <div className="flex min-w-0 flex-1 flex-col bg-white dark:bg-slate-950">
+          
+          {/* Messenger Top Header */}
+          <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 px-4 py-2.5">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setOpenThreadId(null)} className="p-1.5 md:hidden text-gray-600 dark:text-gray-300" aria-label="Back">
+                <MessageCircle size={20} />
+              </button>
+              <Avatar src={userPhoto(activeFriend)} name={activeFriendName} size={40} online={activeFriend.online} />
+              <div>
+                <div className="font-semibold text-gray-900 dark:text-white text-base leading-tight">{activeFriendName}</div>
+                <div className="text-xs text-gray-500">{activeFriend.online ? 'Active now' : 'Offline'}</div>
               </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-black dark:text-white">
+              <button onClick={startVideoCall} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition">
+                <Video size={22} />
+              </button>
             </div>
           </div>
 
-          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto scrollbar-thin p-4">
-            <div className="mx-auto w-fit rounded-full bg-ink-800 px-3 py-1 text-[10px] text-ink-400">{activeFriend.parish ?? ''}</div>
+          {/* Messages Scroll View */}
+          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
             {activeMessages.map((message) => {
               const mine = message.senderId === me.id;
-              // A call invite is carried in the message text; it renders as a
-              // join card rather than a bubble of link text.
               const invite = decodeChatInvite(message.text);
               return (
                 <div
                   key={message.id}
-                  data-unread={!mine && !message.isRead ? 'true' : undefined}
                   className={`flex ${mine ? 'justify-end' : 'justify-start'}`}
                 >
-                  <div className={`flex max-w-[82%] gap-2 sm:max-w-[75%] ${mine ? 'flex-row-reverse' : ''}`}>
+                  <div className={`flex max-w-[85%] sm:max-w-[70%] items-end gap-2 ${mine ? 'flex-row-reverse' : ''}`}>
                     {!mine && <Avatar src={userPhoto(activeFriend)} name={activeFriendName} size={28} />}
+                    
                     <div className="min-w-0">
                       {invite ? (
-                        <MeetingInviteCard
-                          roomId={invite.roomId}
-                          title={invite.title}
-                          variant="chat"
-                          note={mine ? 'You started this call' : `${activeFriendName} started a call`}
-                        />
+                        /* Messenger Call Card Design */
+                        <div className="w-64 rounded-2xl bg-gray-100 dark:bg-gray-800 p-4 text-gray-900 dark:text-white shadow-sm">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-500 text-white">
+                              <PhoneCall size={20} />
+                            </div>
+                            <div>
+                              <div className="font-bold text-sm">Video call</div>
+                              <div className="text-xs text-gray-500">Live call invite</div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={startVideoCall}
+                            className="w-full rounded-xl bg-white dark:bg-gray-700 py-2 text-center text-sm font-semibold text-black dark:text-white shadow-sm transition hover:bg-gray-50"
+                          >
+                            Join call
+                          </button>
+                        </div>
                       ) : (
-                        <div className={`space-y-2 rounded-2xl p-2 text-sm ${
+                        /* Message Bubble */
+                        <div className={`rounded-2xl px-4 py-2 text-[15px] leading-relaxed ${
                           mine
-                            ? 'rounded-tr-sm bg-gradient-to-br from-gold-400 to-gold-500 text-[#17130a]'
-                            : 'rounded-tl-sm bg-ink-800 text-ink-100'
+                            ? 'bg-[#0084ff] text-white rounded-br-xs'
+                            : 'bg-[#f0f0f0] dark:bg-gray-800 text-black dark:text-white rounded-bl-xs'
                         }`}>
                           {message.attachments?.map((attachment) => <MessageAttachment key={attachment.id} attachment={attachment} />)}
-                          {message.text && <div className="px-1.5 py-0.5 whitespace-pre-wrap break-words">{message.text}</div>}
+                          {message.text && <div className="whitespace-pre-wrap break-words">{message.text}</div>}
                         </div>
                       )}
-                      <div className={`mt-0.5 flex items-center gap-1.5 text-[10px] text-ink-400 ${mine ? 'justify-end text-right' : ''}`}>
+                      
+                      <div className={`mt-1 flex items-center gap-1 text-[10px] text-gray-400 ${mine ? 'justify-end' : 'justify-start'}`}>
                         <span>{clockTime(message.createdAt)}</span>
-                        <span aria-label={message.isRead ? 'Message read' : mine ? 'Message sent' : 'Message unread'}>
-                          <MessageStatus message={message} mine={mine} />
-                        </span>
+                        <MessageStatus message={message} mine={mine} />
                       </div>
                     </div>
                   </div>
@@ -495,79 +504,124 @@ export function MessengerView() {
               );
             })}
             {activeMessages.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-12 text-center text-sm text-ink-400">Say hello to {firstName(activeFriendName)}.</div>
+              <div className="flex flex-col items-center justify-center py-12 text-center text-sm text-gray-400">
+                Say hello to {firstName(activeFriendName)}.
+              </div>
             )}
           </div>
 
-          <div className="border-t border-ink-700 bg-ink-850/95 p-3">
+          {/* Messenger Authentic Input Toolbar */}
+          <div className="border-t border-gray-100 dark:border-gray-800 px-3 py-2 bg-white dark:bg-slate-950">
+            {/* Attachment Previews */}
             {(pendingFiles.length > 0 || pendingVoice || recording) && (
-              <div className="mb-3 flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+              <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
                 {pendingFiles.map((item) => (
-                  <div key={item.id} className="relative flex h-20 min-w-36 max-w-52 items-center gap-2 overflow-hidden rounded-xl border border-ink-600 bg-ink-800 p-2">
+                  <div key={item.id} className="relative flex h-16 min-w-32 max-w-48 items-center gap-2 overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2">
                     {item.previewUrl ? (
-                      <img src={item.previewUrl} alt={item.file.name} className="h-full w-16 rounded-lg object-cover" />
-                    ) : <FileIcon size={24} className="ml-2 shrink-0 text-gold-300" />}
-                    <div className="min-w-0 pr-5">
-                      <div className="truncate text-xs font-semibold text-ink-100">{item.file.name}</div>
-                      <div className="text-[10px] text-ink-400">{formatBytes(item.file.size)}</div>
+                      <img src={item.previewUrl} alt={item.file.name} className="h-full w-12 rounded-lg object-cover" />
+                    ) : <FileIcon size={20} className="ml-1 shrink-0 text-blue-500" />}
+                    <div className="min-w-0 pr-4">
+                      <div className="truncate text-xs font-semibold">{item.file.name}</div>
+                      <div className="text-[10px] text-gray-400">{formatBytes(item.file.size)}</div>
                     </div>
-                    <button type="button" onClick={() => removePendingFile(item.id)} className="absolute right-1 top-1 rounded-full bg-ink-950/80 p-1 text-ink-300 hover:text-red-300" aria-label={`Remove ${item.file.name}`}>
+                    <button type="button" onClick={() => removePendingFile(item.id)} className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white hover:bg-black">
                       <X size={12} />
                     </button>
                   </div>
                 ))}
                 {recording && (
-                  <div className="flex min-w-60 items-center gap-3 rounded-xl border border-red-400/40 bg-red-400/10 px-3 py-2 text-red-200">
-                    <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-400" />
-                    <span className="flex-1 text-sm font-semibold">Recording {Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, '0')}</span>
-                    <button type="button" onClick={() => finishRecording(false)} className="rounded-lg bg-red-400/15 p-2 hover:bg-red-400/25" aria-label="Stop recording"><Square size={15} fill="currentColor" /></button>
-                    <button type="button" onClick={() => finishRecording(true)} className="rounded-lg p-2 hover:bg-red-400/15" aria-label="Cancel recording"><Trash2 size={15} /></button>
+                  <div className="flex min-w-48 items-center gap-3 rounded-full bg-red-50 dark:bg-red-950 px-4 py-2 text-red-600">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-red-600" />
+                    <span className="flex-1 text-xs font-bold">Recording {Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, '0')}</span>
+                    <button type="button" onClick={() => finishRecording(false)} className="p-1 hover:bg-red-100 rounded-full"><Square size={14} fill="currentColor" /></button>
+                    <button type="button" onClick={() => finishRecording(true)} className="p-1 hover:bg-red-100 rounded-full"><Trash2 size={14} /></button>
                   </div>
                 )}
                 {pendingVoice && !recording && (
-                  <div className="relative min-w-64 rounded-xl border border-ink-600 bg-ink-800 p-2 pr-9 text-ink-100">
+                  <div className="relative min-w-56 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-2 pr-8">
                     <ChatAudioPlayer src={pendingVoice.previewUrl} duration={pendingVoice.duration} />
-                    <button type="button" onClick={removeVoice} className="absolute right-1 top-1 rounded-full bg-ink-950/80 p-1 text-ink-300 hover:text-red-300" aria-label="Remove voice note"><X size={12} /></button>
+                    <button type="button" onClick={removeVoice} className="absolute right-2 top-2 rounded-full bg-black/60 p-0.5 text-white">
+                      <X size={12} />
+                    </button>
                   </div>
                 )}
               </div>
             )}
-            {composerError && <div className="mb-2 text-xs text-red-300">{composerError}</div>}
-            <div className="flex items-end gap-2">
+
+            {composerError && <div className="mb-2 text-xs text-red-500">{composerError}</div>}
+
+            <div className="flex items-center gap-2 w-full">
               <input ref={photoInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(event) => { addFiles(event.target.files, 'image'); event.target.value = ''; }} />
               <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => { addFiles(event.target.files, 'file'); event.target.value = ''; }} />
-              <div className="flex shrink-0 items-center gap-1 rounded-xl border border-ink-600 bg-ink-800/60 p-1">
-                <button type="button" onClick={() => photoInputRef.current?.click()} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Add photos" aria-label="Add photos"><Image size={17} /></button>
-                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Attach files" aria-label="Attach files"><Paperclip size={17} /></button>
-                <button type="button" onClick={recording ? () => finishRecording(false) : startRecording} disabled={uploading} className={`rounded-lg p-2 hover:bg-ink-700 disabled:opacity-40 ${recording ? 'text-red-300' : 'text-ink-300 hover:text-gold-200'}`} title={recording ? 'Stop recording' : 'Record voice note'} aria-label={recording ? 'Stop recording' : 'Record voice note'}><Mic size={17} /></button>
-                <button type="button" onClick={startVideoCall} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Start a video call" aria-label="Start a video call"><Video size={17} /></button>
-                <button type="button" onClick={sendLike} disabled={uploading || recording} className="rounded-lg p-2 text-ink-300 hover:bg-ink-700 hover:text-gold-200 disabled:opacity-40" title="Send a like" aria-label="Send a like"><ThumbsUp size={17} /></button>
+
+              {/* Left Side Icons (Bare Messenger Style) */}
+              <div className="flex items-center gap-1 shrink-0 text-black dark:text-white">
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition" title="More">
+                  <Plus size={22} />
+                </button>
+                <button type="button" onClick={() => photoInputRef.current?.click()} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition" title="Camera">
+                  <Camera size={22} />
+                </button>
+                <button type="button" onClick={() => photoInputRef.current?.click()} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition" title="Gallery">
+                  <Image size={22} />
+                </button>
+                <button type="button" onClick={recording ? () => finishRecording(false) : startRecording} className={`p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition ${recording ? 'text-red-500' : ''}`} title="Voice">
+                  <Mic size={22} />
+                </button>
               </div>
-              <textarea
-                ref={messageInputRef}
-                rows={3}
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-                    event.preventDefault();
-                    void send();
-                  }
-                }}
-                placeholder={recording ? 'Recording voice note…' : 'Type a message…'}
-                disabled={recording || uploading}
-                className="input min-h-[4.5rem] min-w-0 flex-1 resize-none py-3 leading-6"
-              />
-              <button onClick={() => void send()} disabled={uploading || recording || (!draft.trim() && pendingFiles.length === 0 && !pendingVoice)} className="gold-btn px-3 py-2.5" aria-label="Send message">
-                <Send size={16} />
-                <span className="hidden sm:inline">{uploading ? 'Uploading' : 'Send'}</span>
-              </button>
+
+              {/* Middle Grey Rounded Text Pill */}
+              <div className="flex-1 min-w-0 flex items-center bg-[#f0f2f5] dark:bg-gray-800 rounded-full px-4 py-1.5">
+                <textarea
+                  ref={messageInputRef}
+                  rows={1}
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                      event.preventDefault();
+                      void send();
+                    }
+                  }}
+                  placeholder="Message"
+                  disabled={recording || uploading}
+                  className="w-full resize-none bg-transparent text-[15px] text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none"
+                  style={{ maxHeight: '100px' }}
+                />
+                <button type="button" className="p-1 text-black dark:text-white shrink-0 hover:opacity-70 transition">
+                  <Smile size={20} />
+                </button>
+              </div>
+
+              {/* Right Side Action (Send / Thumbs Up) */}
+              <div className="shrink-0">
+                {draft.trim() || pendingFiles.length > 0 || pendingVoice ? (
+                  <button
+                    type="button"
+                    onClick={() => void send()}
+                    disabled={uploading || recording}
+                    className="p-1.5 text-[#0084ff] hover:opacity-80 transition disabled:opacity-50"
+                  >
+                    <Send size={22} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={sendLike}
+                    disabled={uploading || recording}
+                    className="p-1.5 text-black dark:text-white hover:opacity-80 transition"
+                  >
+                    <ThumbsUp size={24} fill="currentColor" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
+
         </div>
       ) : (
         <div className="hidden flex-1 items-center justify-center p-8 md:flex">
-          <EmptyState icon={<MessageCircle size={26} />} title="Select a conversation" subtitle="Pick a friend on the left to view your message history." />
+          <EmptyState icon={<MessageCircle size={28} />} title="Select a conversation" subtitle="Pick a chat from the left list to begin messaging." />
         </div>
       )}
     </div>
