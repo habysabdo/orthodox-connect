@@ -98,17 +98,6 @@ export interface DiscoverableGroup {
   owner?: Pick<User, 'id' | 'name' | 'email'> | null;
 }
 
-export type FriendStatus = 'none' | 'outgoing' | 'incoming' | 'accepted';
-
-export interface Friendship {
-  /** stable id combining the two user ids */
-  id: string;
-  a: string;
-  b: string;
-  status: FriendStatus;
-  since?: number;
-}
-
 export interface ChatMessage {
   id: string;
   threadId: string;
@@ -139,7 +128,7 @@ export interface Thread {
 }
 
 /** Kinds of in-app notification a member can receive. */
-export type NotificationType = 'like' | 'message';
+export type NotificationType = 'like' | 'message' | 'follow';
 
 export interface Notification {
   id: string;

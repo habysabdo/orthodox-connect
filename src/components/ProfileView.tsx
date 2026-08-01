@@ -1,7 +1,8 @@
-import { ArrowLeft, CalendarDays, CheckCircle2, Church, Edit3, Globe, KeyRound, Loader2, Mail, MessageSquare, Share2, UserPlus, Users } from 'lucide-react';
+import { ArrowLeft, CalendarDays, CheckCircle2, Church, Edit3, Globe, KeyRound, Loader2, Mail, MessageSquare, Share2, UserCheck, Users } from 'lucide-react';
 import { Avatar, Modal } from './ui';
 import { LanguageSwitcher } from './LanguageSwitcher';
-import { useStore, friendsOf, friendshipBetween } from '@/store/context';
+import { FollowButton } from './FollowButton';
+import { useStore } from '@/store/context';
 import { useUI } from '@/store/ui';
 import { useI18n } from '@/i18n';
 import { timeAgo } from '@/utils/format';
@@ -11,6 +12,7 @@ import { PostCard } from './PostCard';
 import { hasAdminAccess } from '@/utils/users';
 import { isImageFile, uploadProfilePhoto, validateImage } from '@/utils/imageUpload';
 import { loadPostsByAuthor } from '@/utils/posts';
+import { loadFollows } from '@/utils/follows';
 import { firstName, userName, userPhoto } from '@/utils/postSafety';
 import { AvatarCropModal } from './AvatarCropModal';
 import { supabase } from '@/lib/supabase';
@@ -56,6 +58,7 @@ export function ProfileView() {
   const [cropFileName, setCropFileName] = useState('avatar');
   const [authoredPosts, setAuthoredPosts] = useState<Post[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
+  const [viewedFollows, setViewedFollows] = useState<{ following: number; followers: number } | null>(null);
 
   // The feed only holds a page of recent posts, so a profile fetches everything
   // its member authored rather than filtering whatever happens to be loaded.
@@ -77,6 +80,26 @@ export function ProfileView() {
       cancelled = true;
     };
   }, [state.currentUserId, viewedUserId]);
+
+  // Follower/following counts for the member being viewed. Own counts come from
+  // the store (the follow graph is polled there); another member's are read from
+  // the API, and re-read when the viewer follows or unfollows them so the number
+  // on screen matches the button straight away.
+  const viewerFollowsProfile = viewedUserId ? state.following.includes(viewedUserId) : false;
+  useEffect(() => {
+    if (!state.currentUserId || !viewedUserId) return;
+    let cancelled = false;
+    loadFollows(viewedUserId)
+      .then((graph) => {
+        if (!cancelled) {
+          setViewedFollows({ following: graph.following.length, followers: graph.followers.length });
+        }
+      })
+      .catch((error) => console.error('Failed to load the follow counts', error));
+    return () => {
+      cancelled = true;
+    };
+  }, [state.currentUserId, viewedUserId, viewerFollowsProfile]);
 
   useEffect(() => {
     if (!successToast) return;
@@ -108,14 +131,14 @@ export function ProfileView() {
     );
   }
 
-  const friends = friendsOf(state, profileUser.id);
   const displayName = userName(profileUser);
   const profilePosts = mergeProfilePosts(
     authoredPosts,
     state.posts.filter((p) => p?.authorId === profileUser.id && !p.groupId),
   );
   const userEvents = state.events.filter((e) => e?.createdBy === profileUser.id);
-  const friendship = isOwnProfile ? undefined : friendshipBetween(state, me.id, profileUser.id);
+  const followingCount = isOwnProfile ? state.following.length : viewedFollows?.following ?? 0;
+  const followerCount = isOwnProfile ? state.followers.length : viewedFollows?.followers ?? 0;
 
   const messageMember = () => {
     const threadId = state.openThreadWith(profileUser.id);
@@ -267,19 +290,7 @@ export function ProfileView() {
                   <button onClick={messageMember} className="ghost-btn py-2 text-xs">
                     <MessageSquare size={13} /> Message
                   </button>
-                  {friendship?.status === 'accepted' ? (
-                    <span className="gold-chip">Connected</span>
-                  ) : friendship?.status === 'outgoing' ? (
-                    <span className="ghost-btn cursor-default py-2 text-xs opacity-70">Request sent</span>
-                  ) : friendship?.status === 'incoming' ? (
-                    <button onClick={() => void state.acceptFriend(profileUser.id)} className="gold-btn py-2 text-xs">
-                      <UserPlus size={13} /> Accept request
-                    </button>
-                  ) : (
-                    <button onClick={() => void state.addFriend(profileUser.id)} className="gold-btn py-2 text-xs">
-                      <UserPlus size={13} /> Connect
-                    </button>
-                  )}
+                  <FollowButton userId={profileUser.id} />
                 </>
               )}
             </div>
@@ -303,8 +314,9 @@ export function ProfileView() {
       </div>
 
       {/* Stats */}
-      <div className={`grid gap-3 ${isOwnProfile ? 'grid-cols-3' : 'grid-cols-2'}`}>
-        {isOwnProfile && <StatCard icon={<Users size={16} />} label={t('profile.connections')} value={friends.length} />}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard icon={<Users size={16} />} label={t('profile.followers')} value={followerCount} />
+        <StatCard icon={<UserCheck size={16} />} label={t('profile.following')} value={followingCount} />
         <StatCard icon={<Edit3 size={16} />} label={t('profile.posts')} value={profilePosts.length} />
         <StatCard icon={<CalendarDays size={16} />} label={t('profile.events')} value={userEvents.length} />
       </div>

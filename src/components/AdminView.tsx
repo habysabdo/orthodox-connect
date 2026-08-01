@@ -3,7 +3,7 @@ import { Ban, CheckCircle2, Clock3, MailPlus, Plus, RefreshCw, Search, Shield, S
 import type { Group, Post, User, UserStatus } from '@/types';
 import { Avatar } from './ui';
 import { timeAgo } from '@/utils/format';
-import { apiUrl } from '@/lib/config';
+import { apiFetch } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/store/context';
 import { useUI } from '@/store/ui';
@@ -93,7 +93,7 @@ function dedupeUsers(users: ManagedUser[]): ManagedUser[] {
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(apiUrl(path), { credentials: 'include', ...init });
+  const response = await apiFetch(path, init);
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.error ?? 'Could not complete this admin action');

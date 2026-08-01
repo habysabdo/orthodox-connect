@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { Avatar, EmptyState } from './ui';
 import { ChatAudioPlayer } from './ChatAudioPlayer';
-import { useStore, friendsOf, threadIdFor, unreadCountFor } from '@/store/context';
+import { useStore, connectedUsers, threadIdFor, unreadCountFor } from '@/store/context';
 import type { ChatAttachment, ChatMessage, User } from '@/types';
 import { useUI } from '@/store/ui';
 import { clockTime, timeAgo } from '@/utils/format';
@@ -159,7 +159,7 @@ export function MessengerView() {
   pendingFilesRef.current = pendingFiles;
   pendingVoiceRef.current = pendingVoice;
 
-  const friends = friendsOf(state, me?.id ?? '');
+  const friends = connectedUsers(state);
   const myThreads = state.threads.filter((thread) => me && thread?.participantIds?.includes(me.id));
   const partnerIds = new Set<string>();
   friends.forEach((friend) => partnerIds.add(friend.id));

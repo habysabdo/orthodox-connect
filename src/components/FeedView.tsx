@@ -39,6 +39,7 @@ export function FeedView() {
     activeGroupId,
     users,
     currentUserId,
+    authChecked,
     postsLoading,
     postsLoadingMore,
     postsHasMore,
@@ -125,7 +126,10 @@ export function FeedView() {
 
       <Composer />
 
-      {postsLoading ? (
+      {/* The session has to be settled before "empty" can mean anything: until
+          `authChecked` flips, no feed request has been authorized yet, so a
+          skeleton is the honest state rather than "the feed is quiet". */}
+      {postsLoading || !authChecked ? (
         <FeedSkeleton />
       ) : posts.length === 0 && !permalinkPost ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center">

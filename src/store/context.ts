@@ -4,7 +4,6 @@ import type {
   ChatAttachment,
   ChatMessage,
   CommunityAlert,
-  Friendship,
   Group,
   LiveStream,
   Post,
@@ -17,7 +16,8 @@ export interface AppState {
   currentUserId: string | null;
   // Whether the initial Identity session restore has completed. Starts false so
   // the app can show a loading state instead of flashing the logged-out landing
-  // page while getUser() resolves (noticeably slower on mobile).
+  // page while getUser() resolves (noticeably slower on mobile), and so no
+  // database query is fired against a session that has not been established yet.
   authChecked: boolean;
   groups: Group[];
   activeGroupId: string | null;
@@ -36,7 +36,12 @@ export interface AppState {
   // network and spaces UIs can show skeletons instead of a misleading "empty".
   usersLoading: boolean;
   groupsLoading: boolean;
-  friendships: Friendship[];
+  /** Ids of the members the signed-in member follows. */
+  following: string[];
+  /** Ids of the members who follow the signed-in member. */
+  followers: string[];
+  /** True until the follow graph has been read once for this session. */
+  followsLoading: boolean;
   threads: Thread[];
   streams: LiveStream[];
   events: CalendarEvent[];
@@ -64,10 +69,9 @@ export interface AppActions {
   unflagPost: (postId: string) => void;
   deletePost: (postId: string) => void;
 
-  // friendships
-  addFriend: (otherId: string) => Promise<void>;
-  acceptFriend: (otherId: string) => Promise<void>;
-  removeFriend: (otherId: string) => Promise<void>;
+  // follows
+  followUser: (otherId: string) => Promise<void>;
+  unfollowUser: (otherId: string) => Promise<void>;
 
   // chat
   sendMessage: (threadId: string, text: string, attachments?: ChatAttachment[]) => void;
@@ -116,19 +120,27 @@ export function getUser(state: AppState, id: string | null | undefined): User | 
   return state.users.find((u) => u?.id === id);
 }
 
-export function friendsOf(state: AppState, userId: string): User[] {
-  const friendIds = new Set(
-    state.friendships
-      .filter((f) => f?.status === 'accepted' && (f.a === userId || f.b === userId))
-      .map((f) => (f.a === userId ? f.b : f.a)),
-  );
-  return state.users.filter((user) => user && friendIds.has(user.id));
+export function isFollowing(state: AppState, userId: string): boolean {
+  return state.following.includes(userId);
 }
 
-export function friendshipBetween(state: AppState, a: string, b: string): Friendship | undefined {
-  return state.friendships.find(
-    (f) => f && ((f.a === a && f.b === b) || (f.a === b && f.b === a)),
-  );
+/** The members the signed-in member follows, in roster order. */
+export function followingUsers(state: AppState): User[] {
+  const ids = new Set(state.following);
+  return state.users.filter((user) => user && ids.has(user.id));
+}
+
+/** The members who follow the signed-in member. */
+export function followerUsers(state: AppState): User[] {
+  const ids = new Set(state.followers);
+  return state.users.filter((user) => user && ids.has(user.id));
+}
+
+// People a member can start a conversation with: everybody they follow, plus
+// everybody who follows them, so a DM is never blocked by a one-way follow.
+export function connectedUsers(state: AppState): User[] {
+  const ids = new Set([...state.following, ...state.followers]);
+  return state.users.filter((user) => user && ids.has(user.id));
 }
 
 export function threadForUsers(state: AppState, a: string, b: string): Thread | undefined {

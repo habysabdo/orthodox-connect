@@ -1,5 +1,5 @@
 import type { User } from '../types';
-import { apiUrl } from '../lib/config';
+import { apiFetch } from '../lib/api';
 import { normalizeUsers } from './postSafety';
 
 export const SUPER_ADMIN_EMAIL = 'lucasautocode@gmail.com';
@@ -12,7 +12,7 @@ export function hasAdminAccess(user: Pick<User, 'email' | 'role'> | null | undef
 // Load every registered member from the database (profiles saved during
 // onboarding). Used by the admin panel to show the live community roster.
 export async function loadUsers(): Promise<User[]> {
-  const res = await fetch(apiUrl('/api/users'));
+  const res = await apiFetch('/api/users');
   if (!res.ok) throw new Error('Failed to load users');
   return normalizeUsers(await res.json());
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Bell, BellOff, CheckCheck, Heart, Loader2, MessageCircle, Share, X } from 'lucide-react';
+import { Bell, BellOff, CheckCheck, Heart, Loader2, MessageCircle, Share, UserPlus, X } from 'lucide-react';
 import { Avatar } from './ui';
 import { useStore, getUser } from '@/store/context';
 import { useNotifications, useNotificationNavigate } from '@/store/notifications';
@@ -206,10 +206,16 @@ export function NotificationBell({ activeThreadId }: { activeThreadId: string | 
                         <Avatar src={actor?.photo ?? ''} name={n.actorName || 'Member'} size={38} />
                         <span
                           className={`absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full text-white ${
-                            n.type === 'like' ? 'bg-red-500' : 'bg-gold-500'
+                            n.type === 'like' ? 'bg-red-500' : n.type === 'follow' ? 'bg-sky-500' : 'bg-gold-500'
                           }`}
                         >
-                          {n.type === 'like' ? <Heart size={9} className="fill-white" /> : <MessageCircle size={9} />}
+                          {n.type === 'like' ? (
+                            <Heart size={9} className="fill-white" />
+                          ) : n.type === 'follow' ? (
+                            <UserPlus size={9} />
+                          ) : (
+                            <MessageCircle size={9} />
+                          )}
                         </span>
                       </div>
                       <div className="min-w-0 flex-1">

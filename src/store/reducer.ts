@@ -1,17 +1,14 @@
 import {
-  friendsOf,
+  connectedUsers,
   groupCacheKey,
   threadIdFor,
-  uid,
   type AppState,
 } from './context';
 import type {
   CalendarEvent,
   ChatMessage,
   CommunityAlert,
-  Friendship,
   Group,
-  Friendship as _F,
   LiveChatMessage,
   LiveStream,
   Post,
@@ -34,7 +31,7 @@ export type Action =
   | { type: 'HYDRATE_USERS'; users: User[] }
   | { type: 'HYDRATE_GROUPS'; groups: Group[] }
   | { type: 'SET_ACTIVE_GROUP'; groupId: string | null }
-  | { type: 'HYDRATE_FRIENDSHIPS'; friendships: Friendship[] }
+  | { type: 'HYDRATE_FOLLOWS'; following: string[]; followers: string[] }
   | { type: 'HYDRATE_POSTS'; posts: Post[]; cacheKey?: string; hasMore?: boolean }
   | { type: 'APPEND_POSTS'; posts: Post[]; cacheKey: string; hasMore: boolean }
   | { type: 'SET_POSTS_LOADING'; loading: boolean }
@@ -50,9 +47,8 @@ export type Action =
   | { type: 'FLAG_POST'; postId: string; reason: string }
   | { type: 'UNFLAG_POST'; postId: string }
   | { type: 'DELETE_POST'; postId: string }
-  | { type: 'ADD_FRIEND'; from: string; to: string }
-  | { type: 'ACCEPT_FRIEND'; from: string; to: string }
-  | { type: 'REMOVE_FRIEND'; a: string; b: string }
+  | { type: 'FOLLOW_USER'; userId: string }
+  | { type: 'UNFOLLOW_USER'; userId: string }
   | { type: 'SEND_MESSAGE'; message: ChatMessage }
   | { type: 'MARK_THREAD_READ'; threadId: string; userId: string; readAt: number }
   | { type: 'ENSURE_THREAD'; thread: Thread }
@@ -85,7 +81,9 @@ export function initialState(): AppState {
     postsHasMore: cached?.postsHasMoreCache[groupCacheKey(null)] ?? false,
     usersLoading: true,
     groupsLoading: true,
-    friendships: [],
+    following: [],
+    followers: [],
+    followsLoading: true,
     threads: [],
     streams: [],
     events: [],
@@ -142,8 +140,8 @@ export function reducer(state: AppState, action: Action): AppState {
         postsHasMore: state.postsHasMoreCache[groupCacheKey(action.groupId)] ?? false,
       };
 
-    case 'HYDRATE_FRIENDSHIPS':
-      return { ...state, friendships: action.friendships };
+    case 'HYDRATE_FOLLOWS':
+      return { ...state, following: action.following, followers: action.followers, followsLoading: false };
 
     case 'HYDRATE_POSTS':
       return {
@@ -202,6 +200,9 @@ export function reducer(state: AppState, action: Action): AppState {
         postsHasMore: false,
         usersLoading: true,
         groupsLoading: true,
+        following: [],
+        followers: [],
+        followsLoading: true,
       };
 
     case 'UPDATE_POST':
@@ -325,19 +326,13 @@ export function reducer(state: AppState, action: Action): AppState {
         ),
       };
 
-    case 'ADD_FRIEND':
-      return { ...state, friendships: upsertFriendship(state.friendships, action.from, action.to, 'outgoing') };
+    case 'FOLLOW_USER':
+      return state.following.includes(action.userId)
+        ? state
+        : { ...state, following: [...state.following, action.userId] };
 
-    case 'ACCEPT_FRIEND':
-      return { ...state, friendships: upsertFriendship(state.friendships, action.to, action.from, 'accepted', true) };
-
-    case 'REMOVE_FRIEND':
-      return {
-        ...state,
-        friendships: state.friendships.filter(
-          (f) => !((f.a === action.a && f.b === action.b) || (f.a === action.b && f.b === action.a)),
-        ),
-      };
+    case 'UNFOLLOW_USER':
+      return { ...state, following: state.following.filter((id) => id !== action.userId) };
 
     case 'SEND_MESSAGE':
       return {
@@ -450,32 +445,5 @@ function upsertUser(users: User[], user: User): User[] {
   return [...users, user];
 }
 
-function upsertFriendship(
-  list: Friendship[],
-  a: string,
-  b: string,
-  status: Friendship['status'],
-  setSince = false,
-): Friendship[] {
-  const existing = list.find((f) => (f.a === a && f.b === b) || (f.a === b && f.b === a));
-  if (existing) {
-    return list.map((f) =>
-      f.id === existing.id
-        ? { ...f, status, since: setSince ? Date.now() : f.since }
-        : f,
-    );
-  }
-  return [
-    ...list,
-    {
-      id: uid('f'),
-      a,
-      b,
-      status,
-      since: setSince ? Date.now() : undefined,
-    } satisfies _F,
-  ];
-}
-
 // keep lint happy about unused import path while still re-exporting helpers
-export const selectors = { friendsOf, threadIdFor };
+export const selectors = { connectedUsers, threadIdFor };

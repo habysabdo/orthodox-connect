@@ -1,5 +1,5 @@
 import type { Post } from '../types';
-import { apiUrl } from '../lib/config';
+import { apiFetch } from '../lib/api';
 import { normalizePost, normalizePosts, normalizeReelsPage } from './postSafety';
 
 export interface ReelsPage {
@@ -14,7 +14,7 @@ export async function loadPosts(groupId?: string | null, options: { limit?: numb
   params.set('limit', String(options.limit ?? 10));
   if (options.before) params.set('before', String(options.before));
   const query = `?${params.toString()}`;
-  const res = await fetch(apiUrl(`/api/posts${query}`), { cache: 'no-store' });
+  const res = await apiFetch(`/api/posts${query}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('Failed to load posts');
   return normalizePosts(await res.json());
 }
@@ -26,7 +26,7 @@ export async function loadPostsByAuthor(authorId: string, limit = 30): Promise<P
     limit: String(limit),
     refresh: Date.now().toString(),
   });
-  const res = await fetch(apiUrl(`/api/posts?${params.toString()}`), { cache: 'no-store' });
+  const res = await apiFetch(`/api/posts?${params.toString()}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('Failed to load this member’s posts');
   return normalizePosts(await res.json());
 }
@@ -45,14 +45,14 @@ export async function loadReels(options: {
     refresh: Date.now().toString(),
   });
   if (options.groupId) params.set('group_id', options.groupId);
-  const res = await fetch(apiUrl(`/api/posts?${params.toString()}`), { cache: 'no-store' });
+  const res = await apiFetch(`/api/posts?${params.toString()}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('Failed to load reels');
   return normalizeReelsPage(await res.json());
 }
 
 // Create or update a single post (used for new posts, likes, comments, flags).
 export async function savePost(post: Post): Promise<void> {
-  const res = await fetch(apiUrl('/api/posts'), {
+  const res = await apiFetch('/api/posts', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(post),
@@ -61,7 +61,7 @@ export async function savePost(post: Post): Promise<void> {
 }
 
 export async function createReshare(originalPostId: string, kind: 'repost' | 'quote', quote = ''): Promise<Post> {
-  const res = await fetch(apiUrl('/api/posts'), {
+  const res = await apiFetch('/api/posts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ originalPostId, kind, quote }),
@@ -71,13 +71,13 @@ export async function createReshare(originalPostId: string, kind: 'repost' | 'qu
 }
 
 export async function loadPost(id: string): Promise<Post> {
-  const res = await fetch(apiUrl(`/api/posts?id=${encodeURIComponent(id)}`), { cache: 'no-store' });
+  const res = await apiFetch(`/api/posts?id=${encodeURIComponent(id)}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('Failed to load post');
   return normalizePost(await res.json());
 }
 
 // Remove a post from the database.
 export async function deletePost(id: string): Promise<void> {
-  const res = await fetch(apiUrl(`/api/posts?id=${encodeURIComponent(id)}`), { method: 'DELETE' });
+  const res = await apiFetch(`/api/posts?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
   if (!res.ok) throw new Error('Failed to delete post');
 }

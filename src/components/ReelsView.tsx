@@ -71,7 +71,7 @@ function createReelSeed(): string {
 }
 
 export function ReelsView() {
-  const { posts, users, currentUserId, activeGroupId, toggleLike, addComment } = useStore();
+  const { posts, users, currentUserId, activeGroupId, authChecked, usersLoading, toggleLike, addComment } = useStore();
   const { selectedReelId, setView } = useUI();
   const [reels, setReels] = useState<Post[]>(() => shuffled(posts.filter((post) => Boolean(postVideoUrl(post)))));
   const [isLoading, setIsLoading] = useState(true);
@@ -222,13 +222,19 @@ export function ReelsView() {
     return () => controller.abort();
   }, [activeReelIndex, visibleReels]);
 
+  // A reel only renders once its author is known, and the roster and the reel
+  // batch load in parallel behind a session that is still being restored — so
+  // "no reels yet" is only the truth once all three have settled. Announcing it
+  // earlier is what made a freshly refreshed page look empty.
+  const resolving = !authChecked || isLoading || usersLoading;
+
   if (visibleReels.length === 0) {
     return (
       <div className="card flex min-h-[60vh] flex-col items-center justify-center p-8 text-center">
         <Volume2 size={34} className="text-gold-300" />
-        <h1 className="mt-4 font-serif text-2xl font-semibold text-ink-100">{isLoading ? 'Loading reels' : 'No reels yet'}</h1>
+        <h1 className="mt-4 font-serif text-2xl font-semibold text-ink-100">{resolving ? 'Loading reels' : 'No reels yet'}</h1>
         <p className="mt-2 max-w-sm text-sm text-ink-400">
-          {isLoading ? 'Finding videos from the community.' : 'Upload a video from the home composer and it appears here automatically.'}
+          {resolving ? 'Finding videos from the community.' : 'Upload a video from the home composer and it appears here automatically.'}
         </p>
         <button onClick={() => setView('feed')} className="gold-btn mt-5">
           <ArrowLeft size={16} /> Return to Home Feed

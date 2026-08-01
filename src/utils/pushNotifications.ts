@@ -1,4 +1,4 @@
-import { apiUrl } from '../lib/config';
+import { apiFetch } from '../lib/api';
 import { FALLBACK_VAPID_PUBLIC_KEY } from '../config/push';
 
 const DEVICE_ID_KEY = 'oc.pushDeviceId';
@@ -92,7 +92,7 @@ export async function enablePushNotifications(): Promise<PushStatus> {
   if (!supportsPush()) return 'unsupported';
 
   try {
-    const keyResponse = await fetch(apiUrl('/api/push-subscriptions'));
+    const keyResponse = await apiFetch('/api/push-subscriptions');
     if (!keyResponse.ok) throw new Error('Unable to load push notification settings.');
     const { publicKey = CLIENT_VAPID_PUBLIC_KEY, configured } = await keyResponse.json() as {
       publicKey?: string;
@@ -113,7 +113,7 @@ export async function enablePushNotifications(): Promise<PushStatus> {
       applicationServerKey: urlBase64ToUint8Array(publicKey),
     });
     const serialized = subscription.toJSON();
-    const response = await fetch(apiUrl('/api/push-subscriptions'), {
+    const response = await apiFetch('/api/push-subscriptions', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -134,7 +134,7 @@ export async function updatePushPresence(activeThreadId: string | null): Promise
   try {
     const subscription = await currentSubscription();
     if (!subscription) return;
-    await fetch(apiUrl('/api/push-subscriptions'), {
+    await apiFetch('/api/push-subscriptions', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
