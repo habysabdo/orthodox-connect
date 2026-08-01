@@ -7,12 +7,12 @@ const env = import.meta.env as Record<string, string | undefined>;
 
 /**
  * The Jitsi deployment the meeting iframe connects to.
- * Defaults to `8x8.vc` or unmoderated Jitsi parameters to bypass moderator lockouts.
+ * Defaults strictly to public `meet.jit.si` to avoid 8x8 moderator lockouts.
  */
 export const JITSI_DOMAIN = (env.VITE_JITSI_DOMAIN ?? '')
   .trim()
   .replace(/^https?:\/\//i, '')
-  .replace(/\/+$/, '') || '8x8.vc';
+  .replace(/\/+$/, '') || 'meet.jit.si';
 
 /**
  * Prefix applied to every room this app opens. Rooms on a shared Jitsi
@@ -26,7 +26,7 @@ const ROOM_LABEL = 'PrayerRoom';
 /** Legacy prefixes that older invite links may still carry. */
 const ROOM_ID_PREFIX = /^(?:PrayerRoom_|meet-)/;
 
-/** Default config overwrites to pass to Jitsi SDK to bypass lobby & moderator screens */
+/** Default config overwrites passed to Jitsi SDK to bypass lobby & moderator screens */
 export const JITSI_CONFIG_OVERWRITE = {
   prejoinPageEnabled: false,
   enableLobby: false,
@@ -34,6 +34,7 @@ export const JITSI_CONFIG_OVERWRITE = {
   requireDisplayName: false,
   startWithAudioMuted: false,
   startWithVideoMuted: false,
+  disableDeepLinking: true,
 };
 
 /** A short, unguessable token appended to a room id. */
@@ -86,15 +87,11 @@ export function meetingUrl(roomId: string): string {
 }
 
 /**
- * The Jitsi room name for a room id. Appends hash parameters if using direct iframe
- * URLs to bypass the "waiting for moderator" lobby screen completely.
+ * Clean Jitsi room name for a room id.
  */
 export function jitsiRoomName(roomId: string): string {
   const id = sanitizeMeetingId(roomId);
-  const baseName = id.startsWith(ROOM_NAMESPACE) ? id : `${ROOM_NAMESPACE}_${id}`;
-  
-  // Appends configuration hashes to bypass moderator login if rendered in standard iframe
-  return `${baseName}#config.prejoinPageEnabled=false&config.enableLobby=false&config.autoKnockLobby=false`;
+  return id.startsWith(ROOM_NAMESPACE) ? id : `${ROOM_NAMESPACE}_${id}`;
 }
 
 /** A readable fallback title for a room that arrived without one. */
