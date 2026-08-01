@@ -108,7 +108,7 @@ function loadYouTubeApi(): Promise<void> {
 }
 
 function fallbackLabel(provider: LinkPreview['provider'] | 'vimeo'): string {
-  if (provider === 'facebook') return 'Watch video on Facebook';
+  if (provider === 'facebook') return 'Watch on Facebook';
   if (provider === 'youtube') return 'Watch on YouTube';
   if (provider === 'vimeo') return 'Watch video on Vimeo';
   return 'Open link';
@@ -133,6 +133,10 @@ function LinkPreviewCard({
     }
   }, [url]);
   const label = fallbackLabel(provider);
+  const isFacebook = provider === 'facebook';
+  const description = preview?.description || (isFacebook
+    ? 'This post may be private, restricted, or unavailable in the in-app viewer.'
+    : '');
 
   return (
     <a
@@ -158,12 +162,12 @@ function LinkPreviewCard({
       <div className="relative z-10 p-4 sm:p-5">
         <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-gold-300">
           <Play size={12} fill="currentColor" aria-hidden="true" />
-          {preview?.siteName || hostname || 'External video'}
+          {preview?.siteName || (isFacebook ? 'Facebook' : hostname) || 'External video'}
         </div>
         <h3 className="line-clamp-2 text-base font-semibold text-white sm:text-lg">
-          {preview?.title || 'This video is available on the original site'}
+          {preview?.title || (isFacebook ? 'Continue watching on Facebook' : 'This video is available on the original site')}
         </h3>
-        {preview?.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-white/70">{preview.description}</p>}
+        {description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-white/70">{description}</p>}
         <span className="mt-4 inline-flex items-center gap-2 rounded-lg bg-gold-400 px-3.5 py-2 text-xs font-bold text-ink-950 transition group-hover:bg-gold-300">
           {label} <ExternalLink size={14} aria-hidden="true" />
         </span>
@@ -208,6 +212,7 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
   const [loading, setLoading] = useState(source.kind === 'iframe');
   const [iframeFailed, setIframeFailed] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const iframeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const youTubePlayerRef = useRef<YouTubePlayer | null>(null);
 
   const initialProvider = source.kind === 'embed' ? source.provider : 'external';
@@ -218,12 +223,25 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
   const provider = resolvedSource.kind === 'embed' ? resolvedSource.provider : initialProvider;
   const externalUrl = preview?.resolvedUrl || source.originalUrl;
   const needsPreview = source.kind === 'iframe';
+  const shouldFetchPreview = needsPreview || initialProvider === 'facebook';
+
+  const clearIframeTimeout = useCallback(() => {
+    if (iframeTimeoutRef.current === null) return;
+    clearTimeout(iframeTimeoutRef.current);
+    iframeTimeoutRef.current = null;
+  }, []);
+
+  const handleIframeFailure = useCallback(() => {
+    clearIframeTimeout();
+    setIframeFailed(true);
+    onError?.();
+  }, [clearIframeTimeout, onError]);
 
   useEffect(() => {
     setPreview(null);
     setIframeFailed(false);
     setLoading(needsPreview);
-    if (!needsPreview) return;
+    if (!shouldFetchPreview) return;
 
     const controller = new AbortController();
     fetch(`/api/link-preview?url=${encodeURIComponent(source.originalUrl)}`, { signal: controller.signal })
@@ -237,9 +255,17 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [needsPreview, source.originalUrl]);
+  }, [needsPreview, shouldFetchPreview, source.originalUrl]);
 
   const canEmbed = resolvedSource.kind === 'embed';
+
+  useEffect(() => {
+    clearIframeTimeout();
+    if (!canEmbed || resolvedSource.kind !== 'embed' || resolvedSource.provider !== 'facebook' || iframeFailed) return;
+
+    iframeTimeoutRef.current = setTimeout(handleIframeFailure, 12_000);
+    return clearIframeTimeout;
+  }, [canEmbed, clearIframeTimeout, handleIframeFailure, iframeFailed, resolvedSource]);
 
   useEffect(() => {
     if (!canEmbed || resolvedSource.kind !== 'embed' || resolvedSource.provider !== 'youtube' || !iframeRef.current) return;
@@ -255,8 +281,7 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
               if (autoPlay) youTubePlayerRef.current?.playVideo();
             },
             onError: () => {
-              setIframeFailed(true);
-              onError?.();
+              handleIframeFailure();
             },
             onAutoplayBlocked: onAutoPlayBlocked,
             onStateChange: (event) => {
@@ -272,7 +297,7 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
       youTubePlayerRef.current?.destroy();
       youTubePlayerRef.current = null;
     };
-  }, [autoPlay, canEmbed, muted, onAutoPlayBlocked, onError, onPlay, resolvedSource]);
+  }, [autoPlay, canEmbed, handleIframeFailure, muted, onAutoPlayBlocked, onPlay, resolvedSource]);
 
   useEffect(() => {
     const player = youTubePlayerRef.current;
@@ -337,13 +362,11 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
         src={embedUrl.toString()}
         title={title}
         loading="lazy"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-        allowFullScreen
+        allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+        allowFullScreen={true}
         referrerPolicy="strict-origin-when-cross-origin"
-        onError={() => {
-          setIframeFailed(true);
-          onError?.();
-        }}
+        onLoad={clearIframeTimeout}
+        onError={handleIframeFailure}
         className="absolute inset-0 h-full w-full border-0"
       />
     </div>
