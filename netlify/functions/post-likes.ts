@@ -50,7 +50,7 @@ async function canAccessGroup(actor: AppActor, groupId: string): Promise<boolean
 export default async (req: Request) => {
   if (req.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
 
-  const actor = await requireAppUser();
+  const actor = await requireAppUser(req);
   if (isResponse(actor)) return actor;
 
   const url = new URL(req.url);

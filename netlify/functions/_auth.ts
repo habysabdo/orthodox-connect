@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm';
+import { getUser, type User } from '@netlify/identity';
 import { db } from '../../db/index.js';
 import { adminNotifications, users } from '../../db/schema.js';
 
@@ -6,20 +7,9 @@ export type AppRole = 'user' | 'admin';
 export type AppStatus = 'active' | 'blocked';
 export const SUPER_ADMIN_EMAIL = 'lucasautocode@gmail.com';
 
-export interface IdentityUser {
-  id: string;
-  email?: string;
-  role?: string;
-  provider?: string;
-  roles?: string[];
-  name?: string;
-  pictureUrl?: string;
-  confirmedAt?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  userMetadata?: Record<string, unknown>;
-  appMetadata?: Record<string, unknown>;
-}
+// The shape Netlify Identity hands back, whether the account was read from the
+// Identity API here or resolved by the runtime.
+export type IdentityUser = User;
 
 export interface AppActor {
   id: string;
@@ -91,7 +81,7 @@ function normalizeIdentityApiUser(value: IdentityApiUser): IdentityUser | null {
     id,
     email: optionalString(value.email),
     role: optionalString(value.role),
-    provider: optionalString(appMetadata.provider),
+    provider: optionalString(appMetadata.provider) as IdentityUser['provider'],
     roles,
     name: optionalString(userMetadata.full_name) ?? optionalString(userMetadata.name),
     pictureUrl: optionalString(userMetadata.avatar_url),
@@ -103,23 +93,106 @@ function normalizeIdentityApiUser(value: IdentityApiUser): IdentityUser | null {
   };
 }
 
-async function identityFromBearer(req?: Request): Promise<IdentityUser | null> {
-  if (!req) return null;
-  const authorization = req.headers.get('authorization')?.trim() ?? '';
-  if (!/^Bearer\s+\S+$/i.test(authorization)) return null;
+function identityEndpoint(path: string, req?: Request): URL | null {
+  const siteUrl = process.env.URL?.trim();
+  const base = siteUrl || req?.url;
+  if (!base) return null;
+  try {
+    return new URL(`/.netlify/identity${path}`, base);
+  } catch {
+    return null;
+  }
+}
+
+// Exchange an access token for the full Identity account. A token that is expired
+// or revoked comes back as a 401 here, which is exactly the check we want.
+async function identityFromAccessToken(token: string, req?: Request): Promise<IdentityUser | null> {
+  const endpoint = identityEndpoint('/user', req);
+  if (!endpoint) return null;
 
   try {
-    const siteUrl = process.env.URL?.trim();
-    const identityUrl = new URL('/.netlify/identity/user', siteUrl || req.url);
-    const response = await fetch(identityUrl, {
-      headers: { Authorization: authorization },
+    const response = await fetch(endpoint, {
+      headers: { Authorization: `Bearer ${token}` },
     });
     if (!response.ok) return null;
     return normalizeIdentityApiUser((await response.json()) as IdentityApiUser);
   } catch (error) {
-    console.error('Could not validate the request bearer token', error);
+    console.error('Could not validate the Identity access token', error);
     return null;
   }
+}
+
+function bearerToken(req?: Request): string | null {
+  const authorization = req?.headers.get('authorization')?.trim() ?? '';
+  const match = /^Bearer\s+(\S+)$/i.exec(authorization);
+  return match ? match[1] : null;
+}
+
+function cookieToken(req: Request | undefined, name: string): string | null {
+  const header = req?.headers.get('cookie');
+  if (!header) return null;
+  for (const part of header.split(';')) {
+    const separator = part.indexOf('=');
+    if (separator === -1) continue;
+    if (part.slice(0, separator).trim() !== name) continue;
+    const value = part.slice(separator + 1).trim();
+    if (!value) continue;
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }
+  return null;
+}
+
+// The browser session is a short-lived access token plus a long-lived refresh
+// token. When the access token has aged out mid-session, trade the refresh token
+// for a fresh one rather than answering 401 and bouncing the member back to the
+// sign-in screen.
+async function identityFromRefreshToken(req?: Request): Promise<IdentityUser | null> {
+  const refreshToken = cookieToken(req, 'nf_refresh');
+  const endpoint = identityEndpoint('/token', req);
+  if (!refreshToken || !endpoint) return null;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken }),
+    });
+    if (!response.ok) return null;
+    const payload = (await response.json()) as { access_token?: unknown };
+    return typeof payload.access_token === 'string'
+      ? await identityFromAccessToken(payload.access_token, req)
+      : null;
+  } catch (error) {
+    console.error('Could not refresh the Identity session', error);
+    return null;
+  }
+}
+
+// Resolve the caller's Identity account from whichever proof of session the
+// request carries: an `Authorization: Bearer` header (uploads and the native app),
+// the `nf_jwt` cookie the browser session writes, the runtime's own Identity
+// context, or the refresh cookie when the access token has expired.
+async function resolveIdentity(req?: Request): Promise<IdentityUser | null> {
+  const headerToken = bearerToken(req);
+  if (headerToken) {
+    const user = await identityFromAccessToken(headerToken, req);
+    if (user) return user;
+  }
+
+  const sessionToken = cookieToken(req, 'nf_jwt');
+  if (sessionToken && sessionToken !== headerToken) {
+    const user = await identityFromAccessToken(sessionToken, req);
+    if (user) return user;
+  }
+
+  const contextUser = await getUser().catch(() => null);
+  if (contextUser) return contextUser;
+
+  return identityFromRefreshToken(req);
 }
 
 export async function syncIdentityUser(identity: IdentityUser) {
@@ -155,7 +228,7 @@ export async function syncIdentityUser(identity: IdentityUser) {
 }
 
 export async function requireAppUser(req?: Request): Promise<AppActor | Response> {
-  const identity = await identityFromBearer(req);
+  const identity = await resolveIdentity(req);
   if (!identity) {
     return Response.json({ error: 'Authentication required' }, { status: 401 });
   }

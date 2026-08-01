@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react';
-import netlifyIdentity from 'netlify-identity-widget';
 import { type CalendarEvent, type ChatAttachment, type CommunityAlert, type Post, type User } from '../types';
 import {
   StoreContext,
@@ -36,7 +35,14 @@ import { createNotification } from '../utils/notifications';
 import type { Notification } from '../types';
 import { createGroupRemote, loadGroups } from '../utils/groups';
 import { apiUrl } from '../lib/config';
-import { persistIdentityCookiesFromLocalStorage, restoreIdentitySession } from '../lib/auth';
+import {
+  AUTH_EVENTS,
+  identityAuthorizationHeaders,
+  onAuthChange,
+  persistIdentityCookiesFromLocalStorage,
+  restoreIdentitySession,
+  signOutIdentity,
+} from '../lib/auth';
 import { clearCachedAppState, saveCachedAppState } from './persistence';
 import { postComments, postLikes, userName } from '../utils/postSafety';
 import { supabase } from '../lib/supabase';
@@ -49,11 +55,38 @@ const GOOGLE_PHOTOS = [
   'https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg',
 ];
 
-async function loadSessionUser(): Promise<User | null> {
-  const response = await fetch(apiUrl(`/api/session?refresh=${Date.now()}`), { cache: 'no-store' });
-  if (response.status === 401 || response.status === 403) return null;
-  if (!response.ok) throw new Error('Failed to load the signed-in account');
-  return response.json();
+const wait = (ms: number) => new Promise<void>((resolve) => { setTimeout(resolve, ms); });
+
+type SessionOutcome =
+  | { kind: 'user'; user: User }
+  /** The request carried no usable session — it may just need a token refresh. */
+  | { kind: 'unauthorized' }
+  /** The account exists but is not allowed in (blocked); refreshing will not help. */
+  | { kind: 'forbidden' };
+
+// Ask the API who is signed in. The request carries the Identity session two ways
+// — the `nf_jwt` cookie and a bearer token — so it is authorized even when cookies
+// are unavailable (private browsing, or a cross-origin API proxy).
+//
+// `retries` exists for the moment right after a sign-in: Identity has just written
+// the cookie, and a single 401 there used to bounce the member back to the login
+// screen instead of letting them in.
+async function loadSession({ retries = 0 }: { retries?: number } = {}): Promise<SessionOutcome> {
+  for (let attempt = 0; ; attempt += 1) {
+    const response = await fetch(apiUrl(`/api/session?refresh=${Date.now()}`), {
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: identityAuthorizationHeaders(),
+    });
+    if (response.ok) return { kind: 'user', user: (await response.json()) as User };
+    if (response.status === 403) return { kind: 'forbidden' };
+    if (response.status === 401) {
+      if (attempt >= retries) return { kind: 'unauthorized' };
+      await wait(250 * (attempt + 1));
+      continue;
+    }
+    throw new Error('Failed to load the signed-in account');
+  }
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -71,12 +104,46 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
 
-    // Initialize netlifyIdentity widget if not initialized
-    try {
-      netlifyIdentity.init();
-    } catch {
-      // Safe fallback if already initialized or running in strict SSR
-    }
+    const forgetSignedInUser = () => {
+      activeUserIdRef.current = null;
+      pendingPostIdsRef.current.clear();
+      postSavePromisesRef.current.clear();
+      clearCachedAppState();
+      dispatch({ type: 'SIGN_OUT' });
+      dispatch({ type: 'AUTH_CHECKED' });
+      // Drop any deep link that belongs to the previous session; the gate renders
+      // the landing page from state, so no navigation or reload is needed.
+      if (window.location.pathname !== '/') {
+        window.history.replaceState({}, '', '/');
+      }
+    };
+
+    // Pull the account behind the current Identity session into the store. This is
+    // the single path that takes a member from the sign-in form to the dashboard —
+    // it never reloads the page, it just swaps the state the gate renders from.
+    const syncSignedInUser = async (retries = 0) => {
+      persistIdentityCookiesFromLocalStorage();
+      try {
+        const session = await loadSession({ retries });
+        if (!active) return;
+        if (session.kind === 'user') {
+          dispatch({ type: 'SIGN_IN', user: session.user });
+        } else if (session.kind === 'forbidden') {
+          // The account is blocked: end the session rather than leave the member
+          // staring at a login form that keeps accepting their password.
+          forgetSignedInUser();
+          void signOutIdentity().catch(() => {
+            // Nothing to clean up if the session has already gone.
+          });
+        } else {
+          console.warn('Identity reported a session but /api/session did not authorize it.');
+        }
+      } catch (err) {
+        console.error('Failed to sync session', err);
+      } finally {
+        if (active) dispatch({ type: 'AUTH_CHECKED' });
+      }
+    };
 
     const refresh = async () => {
       try {
@@ -85,11 +152,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           console.warn('Failed to validate the Supabase session', supabaseSessionError);
         }
         const identity = await restoreIdentitySession();
-        const user = identity?.id ? await loadSessionUser() : null;
         if (!active) return;
-        if (user) dispatch({ type: 'SIGN_IN', user });
-        else if (!identity) dispatch({ type: 'SIGN_OUT' });
-        else console.warn('The signed-in account could not be refreshed; keeping the current session visible.');
+        if (!identity?.id) {
+          dispatch({ type: 'SIGN_OUT' });
+          return;
+        }
+        await syncSignedInUser(1);
       } catch (err) {
         console.error('Failed to restore session', err);
       } finally {
@@ -98,65 +166,46 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
     refresh();
 
-    const handleLogout = () => {
-      persistIdentityCookiesFromLocalStorage();
-      if (active) {
-        activeUserIdRef.current = null;
-        pendingPostIdsRef.current.clear();
-        postSavePromisesRef.current.clear();
-        clearCachedAppState();
-        dispatch({ type: 'SIGN_OUT' });
-        dispatch({ type: 'AUTH_CHECKED' });
-        if (window.location.pathname !== '/login') window.location.replace('/login');
+    // Identity auth events replace the old widget callbacks. They also fire from
+    // other tabs, so signing in or out anywhere keeps every open tab in step.
+    const unsubscribeFromIdentity = onAuthChange((event) => {
+      if (!active) return;
+      switch (event) {
+        case AUTH_EVENTS.LOGIN:
+        case AUTH_EVENTS.RECOVERY:
+          void syncSignedInUser(3);
+          break;
+        case AUTH_EVENTS.TOKEN_REFRESH:
+          // Keep the cookie our API reads in step with the refreshed token.
+          persistIdentityCookiesFromLocalStorage();
+          break;
+        case AUTH_EVENTS.USER_UPDATED:
+          void syncSignedInUser();
+          break;
+        case AUTH_EVENTS.LOGOUT:
+          forgetSignedInUser();
+          break;
+        default:
+          break;
       }
-    };
-
-    const handleLogin = (user: any) => {
-      // Automatically close the Netlify Identity widget modal overlay
-      try {
-        netlifyIdentity.close();
-      } catch {
-        // Safe fallback if modal is already closed
-      }
-      persistIdentityCookiesFromLocalStorage();
-      loadSessionUser()
-        .then((sessionUser) => {
-          if (!active) return;
-          if (sessionUser) {
-            dispatch({ type: 'SIGN_IN', user: sessionUser });
-          } else if (user) {
-            // Fallback: reload page to ensure cookie synchronization with /api/session
-            window.location.reload();
-          }
-          dispatch({ type: 'AUTH_CHECKED' });
-        })
-        .catch((err) => {
-          console.error('Failed to sync session', err);
-          window.location.reload();
-        });
-    };
-
-    netlifyIdentity.on('logout', handleLogout);
-    netlifyIdentity.on('login', handleLogin);
+    });
 
     const { data: supabaseAuthListener } = supabase.auth.onAuthStateChange((event) => {
       if (!active) return;
       if (event === 'TOKEN_REFRESHED') return;
       if (event === 'SIGNED_OUT') {
-        activeUserIdRef.current = null;
-        pendingPostIdsRef.current.clear();
-        postSavePromisesRef.current.clear();
-        clearCachedAppState();
-        dispatch({ type: 'SIGN_OUT' });
-        dispatch({ type: 'AUTH_CHECKED' });
-        if (window.location.pathname !== '/login') window.location.replace('/login');
+        // Supabase only backs storage and public profiles here — Netlify Identity
+        // owns the session. Losing the Supabase session must not sign anybody out
+        // of the app, which is what used to throw signed-in members back to the
+        // login screen in a loop.
+        if (!activeUserIdRef.current) return;
+        console.warn('The Supabase session ended; the Netlify Identity session is unaffected.');
       }
     });
 
     return () => {
       active = false;
-      netlifyIdentity.off('logout', handleLogout);
-      netlifyIdentity.off('login', handleLogin);
+      unsubscribeFromIdentity();
       supabaseAuthListener.subscription.unsubscribe();
     };
   }, []);
@@ -361,23 +410,48 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!state.currentUserId) return;
     let cancelled = false;
-    const verify = () => {
-      loadSessionUser()
-        .then((user) => {
-          if (cancelled) return;
-          if (user) dispatch({ type: 'SIGN_IN', user });
-          else {
-            dispatch({ type: 'SIGN_OUT' });
-            try {
-              netlifyIdentity.logout();
-            } catch {
-              // Safe fallback
-            }
-          }
-        })
-        .catch((error) => console.error('Failed to verify session', error));
+    // Periodically confirm the session is still good. A single unauthorized answer
+    // is not proof that the member signed out — the access token may simply have
+    // aged out — so refresh the Identity session and only sign out when Identity
+    // itself no longer has one. Signing out on the first 401 is what produced the
+    // loop back to the login screen.
+    const endSession = () => {
+      dispatch({ type: 'SIGN_OUT' });
+      void signOutIdentity().catch(() => {
+        // The session is already gone locally; nothing left to clean up.
+      });
     };
-    const interval = setInterval(verify, 15000);
+
+    const verify = async () => {
+      try {
+        const session = await loadSession({ retries: 1 });
+        if (cancelled) return;
+        if (session.kind === 'user') {
+          dispatch({ type: 'SIGN_IN', user: session.user });
+          return;
+        }
+        if (session.kind === 'forbidden') {
+          endSession();
+          return;
+        }
+
+        const identity = await restoreIdentitySession();
+        if (cancelled) return;
+        if (!identity?.id) {
+          endSession();
+          return;
+        }
+
+        const retried = await loadSession({ retries: 1 });
+        if (cancelled) return;
+        if (retried.kind === 'user') dispatch({ type: 'SIGN_IN', user: retried.user });
+        else if (retried.kind === 'forbidden') endSession();
+        else console.warn('The signed-in account could not be refreshed; keeping the session.');
+      } catch (error) {
+        console.error('Failed to verify session', error);
+      }
+    };
+    const interval = setInterval(() => { void verify(); }, 15000);
     return () => {
       cancelled = true;
       clearInterval(interval);
@@ -418,11 +492,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         clearCachedAppState();
         dispatch({ type: 'SIGN_OUT' });
         void supabase.auth.signOut().catch((err) => console.error('Failed to clear the Supabase session', err));
-        try {
-          netlifyIdentity.logout();
-        } catch (err) {
-          console.error('Failed to sign out via identity', err);
-        }
+        void signOutIdentity().catch((err) => console.error('Failed to sign out via identity', err));
       },
 
       async refreshGroups() {

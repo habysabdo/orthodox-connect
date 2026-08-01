@@ -11,7 +11,7 @@ const RESULT_LIMIT = 8;
 // against real records in several database tables and returned grouped into the
 // categories the UI renders: People, Churches, Songs, Videos.
 export default async (req: Request) => {
-  const actor = await requireAppUser();
+  const actor = await requireAppUser(req);
   if (isResponse(actor)) return actor;
   if (req.method !== 'GET') {
     return new Response('Method not allowed', { status: 405 });

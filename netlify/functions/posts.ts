@@ -90,7 +90,7 @@ async function canAccessGroup(actor: AppActor, groupId: string): Promise<boolean
 }
 
 export default async (req: Request) => {
-  const actor = await requireAppUser();
+  const actor = await requireAppUser(req);
   if (isResponse(actor)) return actor;
   const url = new URL(req.url);
 

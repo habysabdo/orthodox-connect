@@ -9,7 +9,7 @@ import { isResponse, requireAppUser } from './_auth.js';
 // recipient (`user_id`); the client subscribes to its own notifications by
 // polling this endpoint and reacts to newly inserted rows (badge + toast).
 export default async (req: Request) => {
-  const actor = await requireAppUser();
+  const actor = await requireAppUser(req);
   if (isResponse(actor)) return actor;
   const url = new URL(req.url);
 

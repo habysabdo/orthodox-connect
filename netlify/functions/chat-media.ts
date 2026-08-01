@@ -51,7 +51,7 @@ function uploadPartKey(actorId: string, uploadId: string, part: number): string 
 }
 
 export default async (req: Request) => {
-  const actor = await requireAppUser();
+  const actor = await requireAppUser(req);
   if (isResponse(actor)) return actor;
 
   const url = new URL(req.url);
