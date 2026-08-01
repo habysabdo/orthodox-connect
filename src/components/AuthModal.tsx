@@ -11,52 +11,26 @@ export const AuthModal: React.FC = () => {
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setNotice('');
 
-    if (!email || !password) {
-      setError('Please fill in all required fields.');
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
-      return;
-    }
-
     setBusy(true);
     try {
       netlifyIdentity.init();
-      
-      // Auto-close any open default Netlify Identity modal
-      try {
+
+      // Listen for successful login event to automatically close the modal and refresh session cookies
+      netlifyIdentity.on('login', () => {
         netlifyIdentity.close();
-      } catch {
-        // Safe fallback if already closed
-      }
+        window.location.reload();
+      });
 
-      const gotrue = (netlifyIdentity as any).gotrue;
-
-      if (isRegister) {
-        if (gotrue) {
-          await gotrue.signup(email, password, { full_name: fullName });
-          setNotice('Registration successful! Please check your email to confirm your account.');
-        } else {
-          netlifyIdentity.open('signup');
-        }
-      } else {
-        if (gotrue) {
-          await gotrue.login(email, password, true);
-          window.location.reload();
-        } else {
-          netlifyIdentity.open('login');
-        }
-      }
-    } catch (err: any) {
+      // Open Netlify Identity modal to issue valid authentication cookies to /api/session
+      netlifyIdentity.open(isRegister ? 'signup' : 'login');
+    } catch (err) {
       console.error('Authentication failed', err);
-      setError(err?.json?.msg || err?.message || 'Invalid email or password. Please try again.');
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
     } finally {
       setBusy(false);
     }
