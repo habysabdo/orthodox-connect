@@ -56,6 +56,7 @@ const RETRYABLE_ERROR_NAMES = new Set(['AuthRetryableFetchError']);
 
 /** How close to expiry a token gets before the check refreshes it deliberately. */
 const REFRESH_LEEWAY_MS = 60_000;
+const AUTH_REQUEST_TIMEOUT_MS = 10_000;
 
 export type SessionStatus =
   /** A usable session is present. */
@@ -70,6 +71,22 @@ export type SessionStatus =
 export interface SessionCheck {
   status: SessionStatus;
   error?: unknown;
+}
+
+async function withAuthTimeout<T>(request: Promise<T>, operation: string): Promise<T> {
+  let timeoutId: number | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = window.setTimeout(
+      () => reject(new Error(`${operation} exceeded ${AUTH_REQUEST_TIMEOUT_MS}ms`)),
+      AUTH_REQUEST_TIMEOUT_MS,
+    );
+  });
+
+  try {
+    return await Promise.race([request, timeout]);
+  } finally {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+  }
 }
 
 /**
@@ -223,7 +240,10 @@ export function clearSessionExpiredNotice(): void {
  */
 export async function verifySupabaseSession(): Promise<SessionCheck> {
   try {
-    const { data, error } = await supabase.auth.getSession();
+    const { data, error } = await withAuthTimeout(
+      supabase.auth.getSession(),
+      'Supabase session restore',
+    );
     if (error) {
       return { status: isUnauthorizedSessionError(error) ? 'expired' : 'unknown', error };
     }
@@ -235,7 +255,10 @@ export async function verifySupabaseSession(): Promise<SessionCheck> {
     const expiringSoon = expiresAtMs === null || expiresAtMs - Date.now() <= REFRESH_LEEWAY_MS;
     if (!expiringSoon) return { status: 'valid' };
 
-    const { error: refreshError } = await supabase.auth.refreshSession();
+    const { error: refreshError } = await withAuthTimeout(
+      supabase.auth.refreshSession(),
+      'Supabase session refresh',
+    );
     if (refreshError) {
       return { status: isUnauthorizedSessionError(refreshError) ? 'expired' : 'unknown', error: refreshError };
     }

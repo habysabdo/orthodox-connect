@@ -81,19 +81,33 @@ function directVideoExtension(url: URL): string | null {
   return DIRECT_VIDEO_EXTENSIONS.includes(extension) ? extension : null;
 }
 
-function youTubeId(url: URL): string | null {
+const YOUTUBE_VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
+
+export function extractYouTubeVideoId(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  const url = normalizeUrl(raw);
+  if (!url) return null;
+
   const host = url.hostname.replace(/^www\./, '');
+  let candidate: string | null = null;
+
   if (host === 'youtu.be') {
-    const id = url.pathname.split('/').filter(Boolean)[0];
-    return id || null;
+    candidate = url.pathname.split('/').filter(Boolean)[0] ?? null;
   }
-  if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'youtube-nocookie.com') {
-    if (url.pathname === '/watch') return url.searchParams.get('v');
+
+  if (
+    host === 'youtube.com' ||
+    host === 'm.youtube.com' ||
+    host === 'music.youtube.com' ||
+    host === 'youtube-nocookie.com'
+  ) {
+    if (url.pathname === '/watch') candidate = url.searchParams.get('v');
     const segments = url.pathname.split('/').filter(Boolean);
     // /embed/ID, /shorts/ID, /v/ID, /live/ID
-    if (['embed', 'shorts', 'v', 'live'].includes(segments[0])) return segments[1] || null;
+    if (['embed', 'shorts', 'v', 'live'].includes(segments[0])) candidate = segments[1] ?? null;
   }
-  return null;
+
+  return candidate && YOUTUBE_VIDEO_ID_PATTERN.test(candidate) ? candidate : null;
 }
 
 function vimeoId(url: URL): string | null {
@@ -186,7 +200,7 @@ export function extractEmbeddedVideoUrl(text: string | undefined | null): string
     const url = normalizeUrl(part.href);
     if (!url) continue;
 
-    if (youTubeId(url) || isFacebookVideoUrl(url)) return url.toString();
+    if (extractYouTubeVideoId(url.toString()) || isFacebookVideoUrl(url)) return url.toString();
   }
 
   return null;
@@ -265,10 +279,10 @@ export function parseVideoSource(raw: string | undefined | null): VideoSource {
     };
   }
 
-  const yt = youTubeId(url);
+  const yt = extractYouTubeVideoId(original);
   if (yt) {
     const origin = typeof window !== 'undefined' ? window.location?.origin : '';
-    const query = new URLSearchParams({ playsinline: '1', rel: '0', enablejsapi: '1' });
+    const query = new URLSearchParams({ enablejsapi: '1' });
     if (origin) query.set('origin', origin);
     return {
       kind: 'embed',

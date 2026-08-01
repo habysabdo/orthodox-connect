@@ -109,7 +109,7 @@ function loadYouTubeApi(): Promise<void> {
 
 function fallbackLabel(provider: LinkPreview['provider'] | 'vimeo'): string {
   if (provider === 'facebook') return 'Watch video on Facebook';
-  if (provider === 'youtube') return 'Watch video on YouTube';
+  if (provider === 'youtube') return 'Watch on YouTube';
   if (provider === 'vimeo') return 'Watch video on Vimeo';
   return 'Open link';
 }
@@ -201,7 +201,6 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
   muted = false,
   title = 'Video',
   onPlay,
-  onError,
   onAutoPlayBlocked,
 }, ref) {
   const [preview, setPreview] = useState<LinkPreview | null>(null);
@@ -260,7 +259,6 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
             },
             onError: () => {
               setFailed(true);
-              onError?.();
             },
             onAutoplayBlocked: onAutoPlayBlocked,
             onStateChange: (event) => {
@@ -271,7 +269,6 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
       })
       .catch(() => {
         setFailed(true);
-        onError?.();
       });
 
     return () => {
@@ -279,7 +276,7 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
       youTubePlayerRef.current?.destroy();
       youTubePlayerRef.current = null;
     };
-  }, [autoPlay, canEmbed, muted, onAutoPlayBlocked, onError, onPlay, resolvedSource]);
+  }, [autoPlay, canEmbed, muted, onAutoPlayBlocked, onPlay, resolvedSource]);
 
   useEffect(() => {
     const player = youTubePlayerRef.current;
@@ -349,7 +346,6 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
         referrerPolicy="strict-origin-when-cross-origin"
         onError={() => {
           setFailed(true);
-          onError?.();
         }}
         className="absolute inset-0 h-full w-full border-0"
       />

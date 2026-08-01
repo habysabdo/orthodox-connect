@@ -38,16 +38,6 @@ import { PostShareModal } from './PostShareModal';
 import { LikesModal } from './LikesModal';
 import { ProfileLink } from './ProfileLink';
 
-// Helper function to extract YouTube video ID and build an embed URL
-function getYouTubeEmbedUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-  const match = url.match(regExp);
-  return match && match[2].length === 11
-    ? `https://www.youtube-nocookie.com/embed/${match[2]}`
-    : null;
-}
-
 // Helper function to detect Facebook video links
 function isFacebookUrl(url: string | null | undefined): boolean {
   if (!url) return false;
@@ -134,20 +124,6 @@ export function PostCard({ post }: { post: Post }) {
   };
 
   const renderVideoPlayer = (url: string) => {
-    if (getYouTubeEmbedUrl(url)) {
-      return (
-        <div className="aspect-video w-full overflow-hidden bg-black">
-          <iframe
-            src={getYouTubeEmbedUrl(url)!}
-            title="Shared YouTube Video"
-            className="h-full w-full border-0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
-        </div>
-      );
-    }
-
     if (isFacebookUrl(url)) {
       return (
         <div className="flex flex-col items-center justify-center p-6 text-center bg-ink-900 text-ink-200">

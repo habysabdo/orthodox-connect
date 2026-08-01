@@ -202,17 +202,40 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     netlifyIdentity.on('logout', handleLogout);
     netlifyIdentity.on('login', handleLogin);
 
-    const { data: supabaseAuthListener } = supabase.auth.onAuthStateChange((event) => {
-      if (!active) return;
-      if (event === 'TOKEN_REFRESHED') return;
-      if (event === 'SIGNED_OUT') {
-        // Supabase also reports SIGNED_OUT when its own background refresh is
-        // rejected, so the stored keys are cleared here as well — synchronously,
-        // before the navigation below can unload the page.
-        clearLocalAuthStorage();
-        resetToSignedOut();
-      }
-    });
+    let supabaseAuthListener: ReturnType<typeof supabase.auth.onAuthStateChange>['data'] | null = null;
+    const authListenerSetupTimeoutId = window.setTimeout(
+      () => finishAuthRestore(true),
+      AUTH_RESTORE_TIMEOUT_MS,
+    );
+
+    try {
+      const { data } = supabase.auth.onAuthStateChange((event) => {
+        const authEventTimeoutId = window.setTimeout(
+          () => finishAuthRestore(true),
+          AUTH_RESTORE_TIMEOUT_MS,
+        );
+
+        try {
+          if (!active || event === 'TOKEN_REFRESHED') return;
+          if (event === 'SIGNED_OUT') {
+            // Supabase also reports SIGNED_OUT when its own background refresh is
+            // rejected, so the stored keys are cleared here as well — synchronously,
+            // before the navigation below can unload the page.
+            clearLocalAuthStorage();
+            resetToSignedOut();
+          }
+        } catch (error) {
+          console.error('Failed to process the Supabase auth state change', error);
+        } finally {
+          window.clearTimeout(authEventTimeoutId);
+        }
+      });
+      supabaseAuthListener = data;
+    } catch (error) {
+      console.error('Failed to subscribe to Supabase auth state changes', error);
+    } finally {
+      window.clearTimeout(authListenerSetupTimeoutId);
+    }
 
     // A phone that has been asleep for days wakes up holding an access token
     // that expired long ago, and it is the refresh on the first foreground
@@ -240,7 +263,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       netlifyIdentity.off('login', handleLogin);
       document.removeEventListener('visibilitychange', handleForeground);
       window.removeEventListener('focus', handleForeground);
-      supabaseAuthListener.subscription.unsubscribe();
+      supabaseAuthListener?.subscription.unsubscribe();
     };
   }, []);
 
