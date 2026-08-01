@@ -11,7 +11,7 @@ export const AuthModal: React.FC = () => {
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setNotice('');
@@ -29,11 +29,34 @@ export const AuthModal: React.FC = () => {
     setBusy(true);
     try {
       netlifyIdentity.init();
-      // Open Netlify Identity modal directly to perform authentication
-      netlifyIdentity.open(isRegister ? 'signup' : 'login');
-    } catch (err) {
+      
+      // Auto-close any open default Netlify Identity modal
+      try {
+        netlifyIdentity.close();
+      } catch {
+        // Safe fallback if already closed
+      }
+
+      const gotrue = (netlifyIdentity as any).gotrue;
+
+      if (isRegister) {
+        if (gotrue) {
+          await gotrue.signup(email, password, { full_name: fullName });
+          setNotice('Registration successful! Please check your email to confirm your account.');
+        } else {
+          netlifyIdentity.open('signup');
+        }
+      } else {
+        if (gotrue) {
+          await gotrue.login(email, password, true);
+          window.location.reload();
+        } else {
+          netlifyIdentity.open('login');
+        }
+      }
+    } catch (err: any) {
       console.error('Authentication failed', err);
-      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      setError(err?.json?.msg || err?.message || 'Invalid email or password. Please try again.');
     } finally {
       setBusy(false);
     }
