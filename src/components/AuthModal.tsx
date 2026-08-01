@@ -11,7 +11,7 @@ export const AuthModal: React.FC = () => {
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setNotice('');
@@ -28,37 +28,12 @@ export const AuthModal: React.FC = () => {
 
     setBusy(true);
     try {
-      // Ensure netlifyIdentity is initialized
       netlifyIdentity.init();
-
-      // Access internal gotrue instance for headless API authentication
-      const gotrue = (netlifyIdentity as any).gotrue;
-
-      if (isRegister) {
-        if (!gotrue) {
-          // Fallback to widget if gotrue client isn't ready
-          netlifyIdentity.open('signup');
-          return;
-        }
-
-        await gotrue.signup(email, password, { full_name: fullName });
-        setNotice('Registration successful! Please check your email to confirm your account.');
-      } else {
-        if (!gotrue) {
-          netlifyIdentity.open('login');
-          return;
-        }
-
-        // Authenticate silently with form credentials
-        const user = await gotrue.login(email, password, true);
-        
-        // Ensure widget overlay is hidden and refresh state
-        netlifyIdentity.close();
-        window.location.reload();
-      }
-    } catch (err: any) {
+      // Open Netlify Identity modal directly to perform authentication
+      netlifyIdentity.open(isRegister ? 'signup' : 'login');
+    } catch (err) {
       console.error('Authentication failed', err);
-      setError(err?.json?.msg || err?.message || 'Authentication failed. Please check your credentials.');
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
     } finally {
       setBusy(false);
     }

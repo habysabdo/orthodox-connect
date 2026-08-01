@@ -113,6 +113,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
 
     const handleLogin = () => {
+      // Automatically close the Netlify Identity widget modal overlay
+      try {
+        netlifyIdentity.close();
+      } catch {
+        // Safe fallback if modal is already closed
+      }
       persistIdentityCookiesFromLocalStorage();
       loadSessionUser()
         .then((user) => {
