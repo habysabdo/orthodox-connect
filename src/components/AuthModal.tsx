@@ -1,6 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Mail, Lock, User, UserPlus, LogIn, AlertCircle } from 'lucide-react';
-import netlifyIdentity from 'netlify-identity-widget';
+import { describeAuthError, signInWithPassword, signUpWithPassword } from '../lib/auth';
+
+// How long to keep waiting for the dashboard after Identity has accepted the
+// credentials, before telling the member something is wrong on our side.
+const SESSION_HANDOFF_TIMEOUT_MS = 12000;
 
 export const AuthModal: React.FC = () => {
   const [isRegister, setIsRegister] = useState(false);
@@ -10,32 +14,43 @@ export const AuthModal: React.FC = () => {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const handoffTimerRef = useRef<number | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => () => {
+    if (handoffTimerRef.current !== null) window.clearTimeout(handoffTimerRef.current);
+  }, []);
+
+  // Authentication happens headlessly against Netlify Identity from these very
+  // fields — no widget, no second modal. On success the store picks up the auth
+  // event and swaps the landing page for the dashboard, so this form simply stays
+  // in its busy state until it unmounts.
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy) return;
     setError('');
     setNotice('');
-
     setBusy(true);
+
     try {
-      netlifyIdentity.init();
+      const result = isRegister
+        ? await signUpWithPassword(email, password, fullName)
+        : await signInWithPassword(email, password);
 
-      // Ensure modal auto-closes and reloads when Netlify Identity fires login
-      netlifyIdentity.on('login', () => {
-        try {
-          netlifyIdentity.close();
-        } catch {
-          // Safe fallback
-        }
-        window.location.reload();
-      });
+      if (result.signedIn) {
+        handoffTimerRef.current = window.setTimeout(() => {
+          setBusy(false);
+          setError('You are signed in, but your dashboard could not be loaded. Please try again.');
+        }, SESSION_HANDOFF_TIMEOUT_MS);
+        return;
+      }
 
-      // Open Netlify Identity modal to perform authentication
-      netlifyIdentity.open(isRegister ? 'signup' : 'login');
+      setNotice(result.notice ?? 'Check your email to finish setting up your account.');
+      setIsRegister(false);
+      setPassword('');
+      setBusy(false);
     } catch (err) {
       console.error('Authentication failed', err);
-      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
-    } finally {
+      setError(describeAuthError(err, isRegister));
       setBusy(false);
     }
   };
@@ -80,6 +95,7 @@ export const AuthModal: React.FC = () => {
                 <input
                   type="text"
                   required
+                  autoComplete="name"
                   placeholder="John Doe"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
@@ -98,6 +114,7 @@ export const AuthModal: React.FC = () => {
               <input
                 type="email"
                 required
+                autoComplete="email"
                 placeholder="name@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -115,6 +132,8 @@ export const AuthModal: React.FC = () => {
               <input
                 type="password"
                 required
+                minLength={6}
+                autoComplete={isRegister ? 'new-password' : 'current-password'}
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

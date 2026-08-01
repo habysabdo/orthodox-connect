@@ -28,7 +28,7 @@ async function setIdentityBan(userId: string, blocked: boolean) {
 }
 
 export default async (req: Request) => {
-  const actor = await requireAdmin();
+  const actor = await requireAdmin(req);
   if (isResponse(actor)) return actor;
   const url = new URL(req.url);
   const resource = url.searchParams.get('resource') ?? 'users';

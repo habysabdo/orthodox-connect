@@ -112,7 +112,7 @@ function fileExtension(contentType: string, fileName: unknown): string {
 export default async (req: Request) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
-  const actor = await requireAppUser();
+  const actor = await requireAppUser(req);
   if (isResponse(actor)) return actor;
 
   let body: UploadRequest;

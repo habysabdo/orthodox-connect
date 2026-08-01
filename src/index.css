@@ -207,10 +207,15 @@ html.theme-transition * {
   }
 }
 
-/* Forcefully hide default Netlify Identity modal iframe overlay */
+/* Belt and braces: the app authenticates headlessly and no longer bundles the
+   Netlify Identity widget, so its white modal iframe cannot be injected. Should
+   anything ever load it again, it stays hidden instead of covering our own form. */
 #netlify-modal-assembly,
+[id^="netlify-modal"],
 .netlify-identity-widget,
-iframe[src*="netlify-identity-widget"] {
+.netlify-identity-menu,
+iframe[src*="netlify-identity-widget"],
+iframe[src*="identity.netlify.com"] {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;

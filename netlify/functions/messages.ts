@@ -9,7 +9,7 @@ import { sendDirectMessagePush } from './_push.js';
 // Persistence for direct chat messages. Each message document lives in the
 // `data` column; `thread_id` and `created_at` are promoted for ordering.
 export default async (req: Request) => {
-  const actor = await requireAppUser();
+  const actor = await requireAppUser(req);
   if (isResponse(actor)) return actor;
   // Return the most recent messages in chronological order; the client groups
   // by thread. Only the JSON document is needed, and the result is bounded so a
