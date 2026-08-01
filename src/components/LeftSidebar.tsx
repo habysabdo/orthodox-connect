@@ -5,6 +5,7 @@ import {
   Home,
   LogOut,
   Radio,
+  Scroll,
   Shield,
   Sun,
   MessageCircle,
@@ -20,8 +21,18 @@ import { useUI, type ViewKey } from '@/store/ui';
 import { useI18n } from '@/i18n';
 import { hasAdminAccess } from '@/utils/users';
 import { userName } from '@/utils/postSafety';
-import { useTheme } from '@/theme-context';
+import { THEME_LABELS, nextTheme, useTheme } from '@/theme-context';
 import { LanguageSwitcher } from './LanguageSwitcher';
+
+/**
+ * The theme button always advertises the mode it switches *to*, so the cycle
+ * light → dark → ancient → light reads as Dark Mode → Ancient Mode → Light Mode.
+ */
+const THEME_ICONS: Record<string, React.ReactNode> = {
+  light: <Sun size={20} />,
+  dark: <Moon size={20} />,
+  ancient: <Scroll size={20} />,
+};
 
 export function LeftSidebar({ onClose }: { onClose?: () => void }) {
   const state = useStore();
@@ -29,6 +40,7 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
   const { view, setView, setGoLiveOpen, setShareOpen, setPrayerMeetingOpen } = useUI();
   const { t } = useI18n();
   const { theme, toggleTheme } = useTheme();
+  const upcomingTheme = nextTheme(theme);
   const me = users.find((u) => u?.id === currentUserId);
   if (!me) return null;
 
@@ -168,12 +180,10 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
           type="button"
           onClick={toggleTheme}
           className="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-ink-300 transition-all hover:bg-ink-800 hover:text-ink-100"
-          aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          aria-label={`Switch to ${THEME_LABELS[upcomingTheme].toLowerCase()}`}
         >
-          <span className="text-ink-400 group-hover:text-gold-300">
-            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-          </span>
-          <span className="flex-1 text-left">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+          <span className="text-ink-400 group-hover:text-gold-300">{THEME_ICONS[upcomingTheme]}</span>
+          <span className="flex-1 text-left">{THEME_LABELS[upcomingTheme]}</span>
         </button>
 
       </nav>

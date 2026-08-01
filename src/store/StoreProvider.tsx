@@ -797,7 +797,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return tid;
       },
 
-      goLive(title) {
+      goLive(title, sourceUrl) {
         const me = getCurrent();
         if (!me) return '';
         const id = uid('live');
@@ -813,6 +813,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             active: true,
             kind: 'user',
             chat: [],
+            ...(sourceUrl?.trim() ? { sourceUrl: sourceUrl.trim() } : {}),
           },
         });
         return id;

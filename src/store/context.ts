@@ -75,7 +75,7 @@ export interface AppActions {
   openThreadWith: (otherId: string) => string;
 
   // live
-  goLive: (title: string) => string;
+  goLive: (title: string, sourceUrl?: string) => string;
   endLive: (streamId: string) => void;
   joinStream: (streamId: string) => void;
   leaveStream: (streamId: string) => void;

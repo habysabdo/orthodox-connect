@@ -14,13 +14,14 @@ import {
 } from 'lucide-react';
 import { Avatar } from './ui';
 import { LazyFeedVideo } from './LazyFeedVideo';
+import { YouTubeEmbed } from './YouTubeEmbed';
 import { MeetingInviteCard } from './MeetingInviteCard';
 import { useStore, getUser } from '@/store/context';
 import { timeAgo } from '@/utils/format';
 import type { Post } from '@/types';
 import { useUI } from '@/store/ui';
 import { hasAdminAccess } from '@/utils/users';
-import { extractEmbeddedVideoUrl, extractExternalUrl, linkifyText } from '@/utils/video';
+import { extractEmbeddedVideoUrl, extractExternalUrl, linkifyText, youTubeEmbedUrl } from '@/utils/video';
 import {
   firstName,
   isLikedBy,
@@ -37,14 +38,9 @@ import { PostShareModal } from './PostShareModal';
 import { LikesModal } from './LikesModal';
 import { ProfileLink } from './ProfileLink';
 
-// Helper function to extract YouTube video ID and build an embed URL
-function getYouTubeEmbedUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-  const match = url.match(regExp);
-  return match && match[2].length === 11
-    ? `https://www.youtube-nocookie.com/embed/${match[2]}`
-    : null;
+/** True when a URL is a YouTube link, so the post renders the iframe embed. */
+function isYouTube(url: string | null | undefined): boolean {
+  return youTubeEmbedUrl(url) !== null;
 }
 
 export function PostCard({ post }: { post: Post }) {
@@ -97,7 +93,13 @@ export function PostCard({ post }: { post: Post }) {
 
   // A meeting invite renders its own card, so the invite link in the body is not
   // also turned into a link preview.
-  const embeddedVideoUrl = post.meeting
+  //
+  // A post that carries its own video — an upload, or a broadcast saved from Go
+  // Live — plays that video and nothing else. Previously a body link was turned
+  // into a second player, so such a post stacked a YouTube iframe on top of an
+  // HTML5 <video>: two players competing for layout and bandwidth. The attached
+  // video wins; the link stays readable in the body text instead.
+  const embeddedVideoUrl = post.meeting || videoUrl
     ? null
     : extractEmbeddedVideoUrl(bodyText) ?? extractExternalUrl(bodyText);
 
@@ -257,16 +259,8 @@ export function PostCard({ post }: { post: Post }) {
           {postText(post.originalPost) && <p className="whitespace-pre-wrap px-3 pb-3 text-sm leading-relaxed text-ink-200">{postText(post.originalPost)}</p>}
           {postImageUrl(post.originalPost) && <img src={postImageUrl(post.originalPost)} alt="" className="max-h-96 w-full object-cover" referrerPolicy="no-referrer" />}
           {postVideoUrl(post.originalPost) && (
-            getYouTubeEmbedUrl(postVideoUrl(post.originalPost)) ? (
-              <div className="aspect-video w-full overflow-hidden bg-black">
-                <iframe
-                  src={getYouTubeEmbedUrl(postVideoUrl(post.originalPost))!}
-                  title="Original shared video"
-                  className="h-full w-full border-0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              </div>
+            isYouTube(postVideoUrl(post.originalPost)) ? (
+              <YouTubeEmbed url={postVideoUrl(post.originalPost)} title="Original shared video" className="!rounded-none" />
             ) : (
               <LazyFeedVideo
                 url={postVideoUrl(post.originalPost)}
@@ -278,19 +272,12 @@ export function PostCard({ post }: { post: Post }) {
         </div>
       )}
 
-      {/* External video or rich link preview */}
+      {/* External video or rich link preview — only reached when the post has no
+          video of its own, so exactly one player renders per post. */}
       {embeddedVideoUrl && (
         <div className="mx-4 mb-4 overflow-hidden rounded-xl border border-ink-600 bg-black shadow-lg shadow-black/20">
-          {getYouTubeEmbedUrl(embeddedVideoUrl) ? (
-            <div className="aspect-video w-full">
-              <iframe
-                src={getYouTubeEmbedUrl(embeddedVideoUrl)!}
-                title="External media shared in this post"
-                className="h-full w-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
+          {isYouTube(embeddedVideoUrl) ? (
+            <YouTubeEmbed url={embeddedVideoUrl} title="External media shared in this post" className="!rounded-none" />
           ) : (
             <div className="aspect-video w-full">
               <LazyFeedVideo
@@ -314,16 +301,8 @@ export function PostCard({ post }: { post: Post }) {
       {/* Video */}
       {videoUrl && (
         <div className="border-y border-ink-700 bg-black">
-          {getYouTubeEmbedUrl(videoUrl) ? (
-            <div className="aspect-video w-full">
-              <iframe
-                src={getYouTubeEmbedUrl(videoUrl)!}
-                title="Video content"
-                className="h-full w-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
+          {isYouTube(videoUrl) ? (
+            <YouTubeEmbed url={videoUrl} title="Video content" className="!rounded-none" />
           ) : (
             <LazyFeedVideo
               url={videoUrl}

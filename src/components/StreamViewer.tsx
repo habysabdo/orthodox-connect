@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Eye, Maximize2, Minimize2, Send, Users, X } from 'lucide-react';
 import { Avatar } from './ui';
-import { SimulatedCanvas } from './SimulatedCanvas';
+import { LiveStreamPlayer } from './LiveStreamPlayer';
 import { useStore } from '@/store/context';
 import { useUI } from '@/store/ui';
 import { liveDuration } from '@/utils/format';
@@ -86,14 +86,17 @@ export function StreamViewer() {
       </div>
 
       <div className={`flex flex-1 flex-col md:flex-row ${fullscreen ? '' : 'md:max-h-[80vh]'}`}>
-        {/* Video */}
+        {/* Video — exactly one player, chosen from the stream's source */}
         <div className="relative flex-1 bg-black">
-          {stream.kind === 'user' && stream.hostId === me.id ? (
+          {/* The host's own camera broadcast is already previewed in the Go Live
+              window, so it is not mounted a second time here. A broadcast that
+              plays from a link has no such preview and shows normally. */}
+          {stream.kind === 'user' && stream.hostId === me.id && !stream.sourceUrl ? (
             <div className="flex h-full items-center justify-center text-white/60">
               <p className="text-sm">Your broadcast is live in the Go Live window.</p>
             </div>
           ) : (
-            <SimulatedCanvas className="h-full w-full" />
+            <LiveStreamPlayer sourceUrl={stream.sourceUrl} title={stream.title} />
           )}
           <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between">
             <div className="max-w-md">

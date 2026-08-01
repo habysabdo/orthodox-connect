@@ -21,6 +21,11 @@ interface VideoPlayerProps {
   loop?: boolean;
   muted?: boolean;
   title?: string;
+  /**
+   * Fill the parent box and crop to it instead of fitting a 16:9 letterbox.
+   * The vertical reels feed needs edge-to-edge video; feed cards do not.
+   */
+  fill?: boolean;
   onPlay?: () => void;
   onError?: () => void;
   onAutoPlayBlocked?: () => void;
@@ -200,24 +205,33 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
   loop = false,
   muted = false,
   title = 'Video',
+  fill = false,
   onPlay,
   onError,
   onAutoPlayBlocked,
 }, ref) {
+  const initialProvider = source.kind === 'embed' ? source.provider : 'external';
+
+  // YouTube and Vimeo embed straight from the parsed URL. Only Facebook videos
+  // and unknown links need `/api/link-preview` to decide whether an iframe is
+  // possible at all. YouTube used to wait on that call too and treat any error
+  // from it as "not embeddable", so a slow, rate-limited or unauthenticated
+  // metadata request silently downgraded every YouTube post to a link card.
+  const embedsWithoutPreview = initialProvider === 'youtube' || initialProvider === 'vimeo';
+  const needsPreview = !embedsWithoutPreview && (source.kind === 'iframe' || initialProvider === 'facebook');
+
   const [preview, setPreview] = useState<LinkPreview | null>(null);
-  const [loading, setLoading] = useState(source.kind === 'iframe' || (source.kind === 'embed' && source.provider !== 'vimeo'));
+  const [loading, setLoading] = useState(needsPreview);
   const [failed, setFailed] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const youTubePlayerRef = useRef<YouTubePlayer | null>(null);
 
-  const initialProvider = source.kind === 'embed' ? source.provider : 'external';
   const resolvedSource = useMemo(
     () => parseVideoSource(preview?.resolvedUrl || source.originalUrl),
     [preview?.resolvedUrl, source.originalUrl],
   );
   const provider = resolvedSource.kind === 'embed' ? resolvedSource.provider : initialProvider;
   const externalUrl = preview?.resolvedUrl || source.originalUrl;
-  const needsPreview = source.kind === 'iframe' || initialProvider === 'youtube' || initialProvider === 'facebook';
 
   useEffect(() => {
     setPreview(null);
@@ -242,7 +256,7 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
   }, [needsPreview, source.originalUrl]);
 
   const canEmbed = resolvedSource.kind === 'embed' && (
-    resolvedSource.provider === 'vimeo' || Boolean(preview?.embeddable)
+    resolvedSource.provider === 'youtube' || resolvedSource.provider === 'vimeo' || Boolean(preview?.embeddable)
   );
 
   useEffect(() => {
@@ -338,7 +352,7 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
   }
 
   return (
-    <div className={`relative w-full aspect-video overflow-hidden rounded-lg bg-black ${className}`}>
+    <div className={`relative overflow-hidden bg-black ${fill ? 'h-full w-full' : 'aspect-video w-full rounded-lg'} ${className}`}>
       <iframe
         ref={iframeRef}
         src={embedUrl.toString()}
@@ -366,6 +380,7 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
   loop = false,
   muted = false,
   title = 'Video',
+  fill = false,
   onPlay,
   onError,
   onAutoPlayBlocked,
@@ -568,8 +583,11 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
           reportFinalError();
         }}
         onVolumeChange={() => onMutedChange?.(muxPlayerRef.current?.muted ?? muted)}
-        style={{ '--controls': controls ? undefined : 'none' }}
-        className={`w-full aspect-video rounded-lg ${className}`}
+        style={{
+          '--controls': controls ? undefined : 'none',
+          ...(fill ? { '--media-object-fit': 'cover' } : {}),
+        }}
+        className={fill ? `h-full w-full ${className}` : `w-full aspect-video rounded-lg ${className}`}
       />
     );
   }
@@ -588,7 +606,7 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
       // Safe fallback
     }
     return (
-      <div className={`relative w-full aspect-video overflow-hidden rounded-lg bg-black ${className}`}>
+      <div className={`relative overflow-hidden bg-black ${fill ? 'h-full w-full' : 'aspect-video w-full rounded-lg'} ${className}`}>
         <iframe
           ref={hostedIframeRef}
           src={playerUrl}
@@ -619,7 +637,7 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
       playsInline
       {...({ 'webkit-playsinline': 'true' } as Record<string, string>)}
       preload="none"
-      style={{ width: '100%', objectFit: 'contain', aspectRatio: '16 / 9' }}
+      style={fill ? { width: '100%', height: '100%', objectFit: 'cover' } : { width: '100%', objectFit: 'contain', aspectRatio: '16 / 9' }}
       onPlay={onPlay}
       onCanPlay={(event) => {
         if (!autoPlay || !event.currentTarget.paused) return;
@@ -635,7 +653,7 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
           reportFinalError();
         }
       }}
-      className={`rounded-lg bg-black ${className}`}
+      className={`bg-black ${fill ? '' : 'rounded-lg'} ${className}`}
     />
   );
 });

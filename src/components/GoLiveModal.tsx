@@ -1,14 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertCircle, Camera, CheckCircle2, Loader2, Radio, Square, X } from 'lucide-react';
+import { AlertCircle, Camera, CheckCircle2, Link2, Loader2, Radio, Square, X } from 'lucide-react';
 import { Avatar, Modal } from './ui';
 import { SimulatedCanvas } from './SimulatedCanvas';
+import { LiveStreamPlayer } from './LiveStreamPlayer';
 import { useStore } from '@/store/context';
 import { useUI } from '@/store/ui';
 import { LiveBroadcastRecorder, isLiveRecordingSupported, type LiveRecording } from '@/utils/liveRecording';
 import { MAX_VIDEO_SIZE_LABEL } from '@/utils/media';
+import { parseLiveStreamSource } from '@/utils/video';
 import { uploadFeedVideo, videoUploadErrorMessage } from '@/utils/videoUpload';
 
 type BroadcastStatus = 'idle' | 'requesting' | 'live' | 'saving' | 'saved';
+
+/**
+ * How the broadcast is produced: an animated canvas, the host's own camera, or
+ * a stream that already exists somewhere else and is played from its link.
+ */
+type BroadcastMode = 'simulated' | 'camera' | 'link';
 
 /** Frame rate the simulated (canvas) broadcast is recorded at. */
 const SIMULATED_CAPTURE_FPS = 24;
@@ -38,7 +46,10 @@ export function GoLiveModal() {
   const { goLiveOpen, setGoLiveOpen } = useUI();
   const me = users.find((u) => u.id === currentUserId);
   const [title, setTitle] = useState('');
-  const [useCamera, setUseCamera] = useState(false);
+  const [mode, setMode] = useState<BroadcastMode>('simulated');
+  /** Link a 'link' broadcast plays from — a YouTube Live URL, file, or playlist. */
+  const [sourceUrl, setSourceUrl] = useState('');
+  const useCamera = mode === 'camera';
   const [status, setStatus] = useState<BroadcastStatus>('idle');
   const [streamId, setStreamId] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -84,7 +95,8 @@ export function GoLiveModal() {
       saveRequestIdRef.current += 1;
       pendingRecordingRef.current = null;
       setTitle('');
-      setUseCamera(false);
+      setMode('simulated');
+      setSourceUrl('');
       setStatus('idle');
       setStreamId(null);
       setError('');
@@ -150,6 +162,20 @@ export function GoLiveModal() {
     setError('');
     setRecordingNotice('');
 
+    // A linked broadcast is validated before going live, so viewers never open a
+    // stream whose URL resolves to no player at all.
+    const trimmedSource = sourceUrl.trim();
+    if (mode === 'link') {
+      if (!trimmedSource) {
+        setError('Paste the link your stream plays from, or pick another broadcast source.');
+        return;
+      }
+      if (parseLiveStreamSource(trimmedSource).kind === 'none') {
+        setError('That link cannot be played here. Use a YouTube link, an .m3u8 playlist, or a direct video file.');
+        return;
+      }
+    }
+
     if (useCamera) {
       if (!window.isSecureContext) {
         setError('Camera and microphone access requires HTTPS. Open the secure site URL and try again.');
@@ -180,10 +206,13 @@ export function GoLiveModal() {
       }
     } else {
       setStatus('live');
+      if (mode === 'link') {
+        setRecordingNotice('Linked streams play from their own source, so nothing is recorded here.');
+      }
     }
     const broadcastTitle = title.trim() || `${me.name} is live`;
     broadcastTitleRef.current = broadcastTitle;
-    const id = goLive(broadcastTitle);
+    const id = goLive(broadcastTitle, mode === 'link' ? trimmedSource : undefined);
     setStreamId(id);
   };
 
@@ -318,36 +347,59 @@ export function GoLiveModal() {
 
               <div className="mt-5 space-y-2">
                 <button
-                  onClick={() => setUseCamera(false)}
+                  onClick={() => setMode('simulated')}
                   className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
-                    !useCamera ? 'border-gold-400/60 bg-gold-400/10' : 'border-ink-600 bg-ink-850'
+                    mode === 'simulated' ? 'border-gold-400/60 bg-gold-400/10' : 'border-ink-600 bg-ink-850'
                   }`}
                 >
-                  <Radio size={18} className={!useCamera ? 'text-gold-300' : 'text-ink-400'} />
+                  <Radio size={18} className={mode === 'simulated' ? 'text-gold-300' : 'text-ink-400'} />
                   <div>
                     <div className="text-sm font-semibold text-ink-100">Simulated broadcast</div>
                     <div className="text-xs text-ink-400">No camera needed — animated candle-light stream.</div>
                   </div>
                 </button>
                 <button
-                  onClick={() => setUseCamera(true)}
+                  onClick={() => setMode('camera')}
                   className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
-                    useCamera ? 'border-gold-400/60 bg-gold-400/10' : 'border-ink-600 bg-ink-850'
+                    mode === 'camera' ? 'border-gold-400/60 bg-gold-400/10' : 'border-ink-600 bg-ink-850'
                   }`}
                 >
-                  <Camera size={18} className={useCamera ? 'text-gold-300' : 'text-ink-400'} />
+                  <Camera size={18} className={mode === 'camera' ? 'text-gold-300' : 'text-ink-400'} />
                   <div>
                     <div className="text-sm font-semibold text-ink-100">Use my camera and microphone</div>
                     <div className="text-xs text-ink-400">Requires browser permission and a secure HTTPS connection.</div>
                   </div>
                 </button>
+                <button
+                  onClick={() => setMode('link')}
+                  className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
+                    mode === 'link' ? 'border-gold-400/60 bg-gold-400/10' : 'border-ink-600 bg-ink-850'
+                  }`}
+                >
+                  <Link2 size={18} className={mode === 'link' ? 'text-gold-300' : 'text-ink-400'} />
+                  <div>
+                    <div className="text-sm font-semibold text-ink-100">Stream from a link</div>
+                    <div className="text-xs text-ink-400">Relay a YouTube Live, HLS playlist, or hosted video file.</div>
+                  </div>
+                </button>
+                {mode === 'link' && (
+                  <input
+                    value={sourceUrl}
+                    onChange={(e) => setSourceUrl(e.target.value)}
+                    placeholder="https://www.youtube.com/live/…"
+                    inputMode="url"
+                    className="input"
+                  />
+                )}
               </div>
 
               <button onClick={start} className="gold-btn mt-5 w-full py-3">
                 <Radio size={16} /> Start broadcast
               </button>
               <p className="mt-2 text-center text-xs text-ink-400">
-                Your broadcast is recorded and saved to your feed automatically when you end it.
+                {mode === 'link'
+                  ? 'Linked streams play from their own source and are not recorded or saved to your feed.'
+                  : 'Your broadcast is recorded and saved to your feed automatically when you end it.'}
               </p>
             </div>
 
@@ -405,10 +457,13 @@ export function GoLiveModal() {
         ) : (
           /* Live broadcast view */
           <div className="grid gap-0 md:grid-cols-[1fr_300px]">
-            {/* Video */}
+            {/* Video — the camera preview, the animated canvas, or the linked
+                stream's own player. Never more than one of them. */}
             <div className="relative aspect-video bg-black md:aspect-auto md:min-h-[440px]">
               {useCamera ? (
                 <video ref={videoRef} muted playsInline autoPlay className="h-full w-full object-cover" />
+              ) : mode === 'link' ? (
+                <LiveStreamPlayer sourceUrl={sourceUrl.trim()} title={liveStream?.title ?? ''} />
               ) : (
                 <SimulatedCanvas className="h-full w-full" onCanvasReady={handleCanvasReady} />
               )}
