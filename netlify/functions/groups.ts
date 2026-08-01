@@ -5,7 +5,7 @@ import { groupMembers, groups, posts, users } from '../../db/schema.js';
 import { isResponse, requireAppUser } from './_auth.js';
 
 export default async (req: Request) => {
-  const actor = await requireAppUser();
+  const actor = await requireAppUser(req);
   if (isResponse(actor)) return actor;
 
   if (req.method === 'GET') {

@@ -1,6 +1,6 @@
 /* OrthodoxConnect service worker — legacy-safe offline caching and push. */
 
-var VERSION = 'v7';
+var VERSION = 'v8';
 var APP_SHELL = 'oc-shell-' + VERSION;
 var RUNTIME = 'oc-runtime-' + VERSION;
 var PRECACHE_URLS = ['/', '/index.html', '/manifest.json', '/icon.svg', '/icon-192.png', '/icon-512.png'];
@@ -42,16 +42,20 @@ if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') 
 
   self.addEventListener('fetch', function (event) {
     try {
-      if (!self.caches || !event.request || event.request.method !== 'GET') return;
+      if (!self.caches || !event.request) return;
       var request = event.request;
       var url = new URL(request.url);
 
-      if (url.origin === self.location.origin && url.pathname.indexOf('/api/') === 0) {
-        event.respondWith(fetch(request, { cache: 'no-store' }).catch(function () {
-          return new Response('', { status: 503, statusText: 'Offline' });
-        }));
+      // API traffic — authentication and session above all — never goes through
+      // this worker. Returning without calling respondWith leaves the request
+      // entirely to the browser, so credentials, cookies and redirects behave
+      // exactly as they would with no service worker installed, and no response
+      // is ever cached or replayed.
+      if (url.pathname.indexOf('/api/') === 0 || url.pathname.indexOf('/.netlify/') === 0) {
         return;
       }
+
+      if (request.method !== 'GET') return;
 
       if (request.mode === 'navigate') {
         event.respondWith(

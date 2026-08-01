@@ -16,7 +16,7 @@ export default async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: { ...CORS_HEADERS, 'Access-Control-Max-Age': '86400' } });
   }
-  const actor = await requireAppUser();
+  const actor = await requireAppUser(req);
   if (isResponse(actor)) return actor;
 
   if (req.method !== 'GET') {

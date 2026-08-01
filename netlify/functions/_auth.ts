@@ -77,6 +77,11 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+/** Shape a raw Identity API payload into the account fields this app uses. */
+export function normalizeIdentityUser(value: Record<string, unknown>): IdentityUser | null {
+  return normalizeIdentityApiUser(value as IdentityApiUser);
+}
+
 function normalizeIdentityApiUser(value: IdentityApiUser): IdentityUser | null {
   const id = optionalString(value.id);
   if (!id) return null;
@@ -103,21 +108,55 @@ function normalizeIdentityApiUser(value: IdentityApiUser): IdentityUser | null {
   };
 }
 
-async function identityFromBearer(req?: Request): Promise<IdentityUser | null> {
-  if (!req) return null;
+const IDENTITY_COOKIE = 'nf_jwt';
+
+function cookieValue(req: Request, name: string): string | null {
+  const header = req.headers.get('cookie');
+  if (!header) return null;
+  for (const entry of header.split(';')) {
+    const separator = entry.indexOf('=');
+    if (separator === -1) continue;
+    if (entry.slice(0, separator).trim() !== name) continue;
+    const raw = entry.slice(separator + 1).trim();
+    if (!raw) return null;
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      return raw;
+    }
+  }
+  return null;
+}
+
+/**
+ * Read the caller's Identity access token. Requests made by the app attach it as
+ * an `Authorization: Bearer` header; plain same-origin browser requests carry it
+ * in the `nf_jwt` cookie the client writes on sign-in. Accepting both is what
+ * keeps every `/api/*` function reachable — reading only the header made every
+ * cookie-only request answer 401.
+ */
+function accessTokenFromRequest(req: Request): string | null {
   const authorization = req.headers.get('authorization')?.trim() ?? '';
-  if (!/^Bearer\s+\S+$/i.test(authorization)) return null;
+  const bearer = /^Bearer\s+(\S+)$/i.exec(authorization);
+  if (bearer) return bearer[1];
+  return cookieValue(req, IDENTITY_COOKIE);
+}
+
+async function identityFromRequest(req?: Request): Promise<IdentityUser | null> {
+  if (!req) return null;
+  const token = accessTokenFromRequest(req);
+  if (!token) return null;
 
   try {
     const siteUrl = process.env.URL?.trim();
     const identityUrl = new URL('/.netlify/identity/user', siteUrl || req.url);
     const response = await fetch(identityUrl, {
-      headers: { Authorization: authorization },
+      headers: { Authorization: `Bearer ${token}` },
     });
     if (!response.ok) return null;
     return normalizeIdentityApiUser((await response.json()) as IdentityApiUser);
   } catch (error) {
-    console.error('Could not validate the request bearer token', error);
+    console.error('Could not validate the request access token', error);
     return null;
   }
 }
@@ -154,8 +193,13 @@ export async function syncIdentityUser(identity: IdentityUser) {
   return appUser;
 }
 
-export async function requireAppUser(req?: Request): Promise<AppActor | Response> {
-  const identity = await identityFromBearer(req);
+/**
+ * Resolve the signed-in account for a request. The request is required: identity
+ * can only be established from the credentials it carries, so a call without it
+ * can never be anything but 401.
+ */
+export async function requireAppUser(req: Request): Promise<AppActor | Response> {
+  const identity = await identityFromRequest(req);
   if (!identity) {
     return Response.json({ error: 'Authentication required' }, { status: 401 });
   }
@@ -176,7 +220,7 @@ export async function requireAppUser(req?: Request): Promise<AppActor | Response
   };
 }
 
-export async function requireAdmin(req?: Request): Promise<AppActor | Response> {
+export async function requireAdmin(req: Request): Promise<AppActor | Response> {
   const actor = await requireAppUser(req);
   if (actor instanceof Response) return actor;
   if (actor.role !== 'admin') {

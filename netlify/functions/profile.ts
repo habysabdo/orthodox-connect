@@ -6,7 +6,7 @@ import { isResponse, requireAppUser } from './_auth.js';
 import { identityProfileDefaults, loadPublicProfile, syncPublicProfile } from './_supabaseProfiles.js';
 
 export default async (req: Request) => {
-  const actor = await requireAppUser();
+  const actor = await requireAppUser(req);
   if (isResponse(actor)) return actor;
   const requestedUserId = new URL(req.url).searchParams.get('userId') ?? actor.id;
   if (requestedUserId !== actor.id && actor.role !== 'admin') {

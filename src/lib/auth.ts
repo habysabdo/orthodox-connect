@@ -3,6 +3,13 @@ import netlifyIdentity from 'netlify-identity-widget';
 const IDENTITY_STORAGE_KEY = 'gotrue.user';
 const PERSISTENT_COOKIE_MAX_AGE = 60 * 60 * 24 * 400;
 
+/**
+ * Fired on this window whenever a sign-in has stored a usable session token, so
+ * the store can load the account without depending solely on the Identity
+ * widget's own `login` event.
+ */
+export const IDENTITY_SESSION_EVENT = 'orthodoxconnect:identity-session';
+
 export type IdentityUser = ReturnType<typeof netlifyIdentity.currentUser>;
 
 type StoredIdentitySession = {
@@ -16,15 +23,39 @@ function setPersistentCookie(name: string, value: string) {
   document.cookie = `${name}=${encodeURIComponent(value)}; path=/; secure; samesite=lax; max-age=${PERSISTENT_COOKIE_MAX_AGE}`;
 }
 
+function expireCookie(name: string) {
+  document.cookie = `${name}=; path=/; max-age=0`;
+}
+
+/**
+ * Drop the session cookies. The API accepts them as credentials, so leaving them
+ * behind after a sign-out would keep authenticating requests until the token
+ * happened to expire.
+ */
+export function clearIdentityCookies(): void {
+  try {
+    expireCookie('nf_jwt');
+    expireCookie('nf_refresh');
+  } catch {
+    // Safe fallback in non-browser contexts
+  }
+}
+
 export function persistIdentityCookiesFromLocalStorage(): boolean {
   try {
     const storedSession = window.localStorage.getItem(IDENTITY_STORAGE_KEY);
-    if (!storedSession) return false;
+    if (!storedSession) {
+      clearIdentityCookies();
+      return false;
+    }
 
     const session = JSON.parse(storedSession) as StoredIdentitySession;
     const accessToken = session.token?.access_token;
     const refreshToken = session.token?.refresh_token;
-    if (typeof accessToken !== 'string' || typeof refreshToken !== 'string') return false;
+    if (typeof accessToken !== 'string' || typeof refreshToken !== 'string') {
+      clearIdentityCookies();
+      return false;
+    }
 
     setPersistentCookie('nf_jwt', accessToken);
     setPersistentCookie('nf_refresh', refreshToken);
@@ -35,17 +66,62 @@ export function persistIdentityCookiesFromLocalStorage(): boolean {
 }
 
 export function identityAuthorizationHeaders(): Record<string, string> {
+  const accessToken = storedAccessToken();
+  return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+}
+
+/** The Identity access token saved in this browser, if there is one at all. */
+export function storedAccessToken(): string | null {
   try {
     const storedSession = window.localStorage.getItem(IDENTITY_STORAGE_KEY);
-    if (!storedSession) return {};
+    if (!storedSession) return null;
 
     const session = JSON.parse(storedSession) as StoredIdentitySession;
     const accessToken = session.token?.access_token;
-    return typeof accessToken === 'string' && accessToken
-      ? { Authorization: `Bearer ${accessToken}` }
-      : {};
+    return typeof accessToken === 'string' && accessToken ? accessToken : null;
   } catch {
-    return {};
+    return null;
+  }
+}
+
+/** True when this browser holds a stored session that is worth revalidating. */
+export function hasStoredSession(): boolean {
+  return storedAccessToken() !== null;
+}
+
+/**
+ * Return a usable access token for the signed-in member, letting the widget
+ * exchange the refresh token first when the current one is close to expiring.
+ * Returns null when nobody is signed in or the stored session can no longer be
+ * refreshed — the signal that authenticated requests must not be attempted.
+ */
+export async function currentAccessToken(): Promise<string | null> {
+  ensureIdentityInit();
+  const user = netlifyIdentity.currentUser();
+  if (!user) return null;
+
+  try {
+    const token = await user.jwt();
+    if (typeof token === 'string' && token) {
+      // The refreshed token replaces the stored one; mirror it into the cookies
+      // so plain browser requests keep carrying a valid credential too.
+      persistIdentityCookiesFromLocalStorage();
+      return token;
+    }
+  } catch (error) {
+    console.warn('The saved session could not be refreshed.', error);
+    return null;
+  }
+
+  return storedAccessToken();
+}
+
+/** Let the app know a fresh session token is available to use. */
+export function announceIdentitySession(): void {
+  try {
+    window.dispatchEvent(new Event(IDENTITY_SESSION_EVENT));
+  } catch {
+    // Safe fallback in non-browser contexts
   }
 }
 
@@ -152,7 +228,10 @@ export async function signInWithIdentity(
   closeIdentityModal();
   if (store.error) return identityFailure(store.error, 'Could not sign you in. Please try again.');
 
+  // The login succeeded (200): mirror the stored token into the cookies the API
+  // reads, then announce it so the app loads the account straight away.
   persistIdentityCookiesFromLocalStorage();
+  announceIdentitySession();
   return { status: 'signed-in' };
 }
 
