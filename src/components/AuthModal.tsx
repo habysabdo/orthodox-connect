@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, Lock, User, UserPlus, LogIn, AlertCircle } from 'lucide-react';
-import { AuthError, login, signup } from '@netlify/identity';
+import netlifyIdentity from 'netlify-identity-widget';
 
 export const AuthModal: React.FC = () => {
   const [isRegister, setIsRegister] = useState(false);
@@ -28,18 +28,11 @@ export const AuthModal: React.FC = () => {
 
     setBusy(true);
     try {
-      if (isRegister) {
-        const user = await signup(email, password, { full_name: fullName });
-        if (!user.confirmedAt) {
-          setNotice('Account created. Please check your email to confirm, then log in.');
-          setIsRegister(false);
-        }
-      } else {
-        await login(email, password);
-      }
+      // Open Netlify Identity modal for authentication or trigger action
+      netlifyIdentity.open(isRegister ? 'signup' : 'login');
     } catch (err) {
       console.error('Authentication failed', err);
-      setError(err instanceof AuthError ? err.message : 'Something went wrong. Please try again.');
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
     } finally {
       setBusy(false);
     }
