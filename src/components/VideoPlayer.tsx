@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import type Hls from 'hls.js';
 import MuxPlayer, { type MuxPlayerRefAttributes } from '@mux/mux-player-react';
-import { AlertCircle, ExternalLink, Film, Play } from 'lucide-react';
+import { AlertCircle, ExternalLink, Film, Play, RotateCcw } from 'lucide-react';
 import { parseVideoSource, type VideoSource } from '@/utils/video';
 import { bunnyHlsUrl, bunnyHostedPlayerUrl, bunnyPosterUrl } from '@/utils/bunny';
 
@@ -64,12 +64,6 @@ declare global {
 
 let youTubeApiPromise: Promise<void> | null = null;
 
-/**
- * `new URL()` throws on anything it cannot parse, and an embed URL is derived from
- * whatever string a post carries — including one a member typed by hand. Returning
- * null instead lets the player fall back to the link card rather than taking the
- * whole feed down with it.
- */
 function buildEmbedUrl(raw: string | undefined | null): URL | null {
   const value = (raw ?? '').trim();
   if (!value) return null;
@@ -145,7 +139,7 @@ function LinkPreviewCard({
       href={url}
       target="_blank"
       rel="noreferrer noopener"
-      className={`group relative flex min-h-52 flex-col justify-end overflow-hidden bg-ink-950 text-left ${className}`}
+      className={`group relative flex min-h-52 flex-col justify-end overflow-hidden rounded-lg bg-ink-950 text-left ${className}`}
       aria-label={label}
     >
       {preview?.image ? (
@@ -178,13 +172,21 @@ function LinkPreviewCard({
   );
 }
 
-function VideoUnavailable({ className }: { className: string }) {
+function VideoUnavailable({ className, onRetry }: { className: string; onRetry?: () => void }) {
   return (
-    <div className={`relative grid min-h-52 place-items-center overflow-hidden bg-black px-6 text-center ${className}`} role="alert">
+    <div className={`relative grid min-h-52 place-items-center overflow-hidden rounded-lg bg-black px-6 text-center ${className}`} role="alert">
       <div>
         <AlertCircle size={30} className="mx-auto text-red-300" aria-hidden="true" />
         <p className="mt-3 text-sm font-semibold text-white">Video playback unavailable</p>
-        <p className="mt-1 text-xs text-white/60">The rest of this post is still available.</p>
+        <p className="mt-1 text-xs text-white/60">Keep scrolling to watch the next reel or try retrying.</p>
+        {onRetry && (
+          <button
+            onClick={onRetry}
+            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-gold-400 px-3 py-1.5 text-xs font-bold text-ink-950 hover:bg-gold-300 transition"
+          >
+            <RotateCcw size={14} /> Retry
+          </button>
+        )}
       </div>
     </div>
   );
@@ -310,7 +312,7 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
 
   if (loading) {
     return (
-      <div className={`grid min-h-52 place-items-center overflow-hidden bg-ink-950 ${className}`} aria-label="Loading video preview">
+      <div className={`grid min-h-52 place-items-center overflow-hidden rounded-lg bg-ink-950 ${className}`} aria-label="Loading video preview">
         <div className="flex items-center gap-2 text-xs font-medium text-ink-400">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-ink-600 border-t-gold-300" />
           Loading video preview
@@ -336,20 +338,22 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
   }
 
   return (
-    <iframe
-      ref={iframeRef}
-      src={embedUrl.toString()}
-      title={title}
-      loading="lazy"
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-      allowFullScreen
-      referrerPolicy="strict-origin-when-cross-origin"
-      onError={() => {
-        setFailed(true);
-        onError?.();
-      }}
-      className={className}
-    />
+    <div className={`relative w-full aspect-video overflow-hidden rounded-lg bg-black ${className}`}>
+      <iframe
+        ref={iframeRef}
+        src={embedUrl.toString()}
+        title={title}
+        loading="lazy"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowFullScreen
+        referrerPolicy="strict-origin-when-cross-origin"
+        onError={() => {
+          setFailed(true);
+          onError?.();
+        }}
+        className="absolute inset-0 h-full w-full border-0"
+      />
+    </div>
   );
 });
 
@@ -371,13 +375,13 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
   const nativeVideoRef = useRef<HTMLVideoElement | null>(null);
   const hostedIframeRef = useRef<HTMLIFrameElement | null>(null);
   const onErrorRef = useRef(onError);
+  const retryCount = useRef(0);
+
   const getPlayer = () => muxPlayerRef.current ?? nativeVideoRef.current;
 
   const src = ((source.kind === 'direct' ? source.url : url) ?? '').split('#')[0].trim();
   const hlsUrl = source.kind === 'direct' ? bunnyHlsUrl(src) : null;
 
-  // Bunny HLS is preferred for adaptive playback. If the manifest is not ready
-  // yet, the hosted player remains a resilient fallback while encoding finishes.
   const [failedDirectSrc, setFailedDirectSrc] = useState<string | null>(null);
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const hostedFallbackUrl = failedDirectSrc === src ? bunnyHostedPlayerUrl(src) : null;
@@ -389,7 +393,19 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
   useEffect(() => {
     setFailedDirectSrc(null);
     setPlaybackFailed(false);
+    retryCount.current = 0;
   }, [src]);
+
+  const handleRetry = useCallback(() => {
+    setPlaybackFailed(false);
+    setFailedDirectSrc(null);
+    retryCount.current = 0;
+    const player = nativeVideoRef.current;
+    if (player) {
+      player.load();
+      void player.play().catch(() => undefined);
+    }
+  }, []);
 
   const reportFinalError = useCallback(() => {
     setPlaybackFailed(true);
@@ -402,10 +418,14 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
 
     let disposed = false;
     let hlsInstance: Hls | null = null;
+
     const handleStreamFailure = () => {
       if (disposed) return;
-      if (bunnyHostedPlayerUrl(src)) setFailedDirectSrc(src);
-      else reportFinalError();
+      if (bunnyHostedPlayerUrl(src)) {
+        setFailedDirectSrc(src);
+      } else {
+        reportFinalError();
+      }
     };
 
     if (player.canPlayType('application/vnd.apple.mpegurl')) {
@@ -425,10 +445,27 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
             backBufferLength: 30,
             maxBufferLength: 30,
             maxMaxBufferLength: 60,
+            manifestLoadingMaxRetry: 4,
+            levelLoadingMaxRetry: 4,
+            fragLoadingMaxRetry: 6,
           });
+
           hlsInstance.on(HlsPlayer.Events.ERROR, (_event, data) => {
-            if (data.fatal) handleStreamFailure();
+            if (data.fatal) {
+              switch (data.type) {
+                case HlsPlayer.ErrorTypes.NETWORK_ERROR:
+                  hlsInstance?.startLoad();
+                  break;
+                case HlsPlayer.ErrorTypes.MEDIA_ERROR:
+                  hlsInstance?.recoverMediaError();
+                  break;
+                default:
+                  handleStreamFailure();
+                  break;
+              }
+            }
           });
+
           hlsInstance.loadSource(hlsUrl);
           hlsInstance.attachMedia(player);
         })
@@ -509,7 +546,7 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
     });
   }, [autoPlay, muted, onAutoPlayBlocked, source.kind]);
 
-  if (playbackFailed) return <VideoUnavailable className={className} />;
+  if (playbackFailed) return <VideoUnavailable className={className} onRetry={handleRetry} />;
 
   if (source.kind === 'mux') {
     return (
@@ -523,10 +560,16 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
         loop={loop}
         muted={muted}
         onPlay={onPlay}
-        onError={reportFinalError}
+        onError={() => {
+          if (retryCount.current < 2) {
+            retryCount.current += 1;
+            return;
+          }
+          reportFinalError();
+        }}
         onVolumeChange={() => onMutedChange?.(muxPlayerRef.current?.muted ?? muted)}
         style={{ '--controls': controls ? undefined : 'none' }}
-        className={className}
+        className={`w-full aspect-video rounded-lg ${className}`}
       />
     );
   }
@@ -542,21 +585,22 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
       parsedUrl.searchParams.set('preload', 'false');
       playerUrl = parsedUrl.toString();
     } catch {
-      // The source parser already validates hosted URLs; keep its safe fallback.
+      // Safe fallback
     }
     return (
-      <iframe
-        ref={hostedIframeRef}
-        src={playerUrl}
-        title={title}
-        loading="lazy"
-        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
-        allowFullScreen
-        referrerPolicy="strict-origin-when-cross-origin"
-        onError={reportFinalError}
-        style={{ border: 0, width: '100%', height: '100%', aspectRatio: '16 / 9' }}
-        className={className}
-      />
+      <div className={`relative w-full aspect-video overflow-hidden rounded-lg bg-black ${className}`}>
+        <iframe
+          ref={hostedIframeRef}
+          src={playerUrl}
+          title={title}
+          loading="lazy"
+          allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
+          allowFullScreen
+          referrerPolicy="strict-origin-when-cross-origin"
+          onError={reportFinalError}
+          className="absolute inset-0 h-full w-full border-0"
+        />
+      </div>
     );
   }
 
@@ -585,10 +629,13 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
       onError={(event) => {
         const mediaError = event.currentTarget.error;
         console.error('Video playback failed', { url: src, code: mediaError?.code, message: mediaError?.message });
-        if (bunnyHostedPlayerUrl(src)) setFailedDirectSrc(src);
-        else reportFinalError();
+        if (bunnyHostedPlayerUrl(src) && failedDirectSrc !== src) {
+          setFailedDirectSrc(src);
+        } else {
+          reportFinalError();
+        }
       }}
-      className={className}
+      className={`rounded-lg bg-black ${className}`}
     />
   );
 });
