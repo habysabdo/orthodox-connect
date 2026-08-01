@@ -194,6 +194,12 @@ export interface LiveStream {
   active: boolean;
   /** seed streams render an animated canvas; user streams use webcam */
   kind: 'seed' | 'user';
+  /**
+   * Where the broadcast plays from, when it is not the host's own camera: a
+   * YouTube Live link, a direct file, or an HLS playlist. Absent for camera
+   * broadcasts. The viewer resolves this to exactly one player.
+   */
+  sourceUrl?: string;
 }
 
 export interface CalendarEvent {

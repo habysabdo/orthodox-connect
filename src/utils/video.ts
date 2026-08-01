@@ -96,6 +96,42 @@ function youTubeId(url: URL): string | null {
   return null;
 }
 
+/**
+ * Canonical YouTube embed URL for any YouTube link shape we accept —
+ * `watch?v=`, `youtu.be/`, `/shorts/`, `/live/`, `/embed/` and `/v/`.
+ * Returns null when the value is not a YouTube video, so callers can branch on
+ * it to decide between an iframe and their own player.
+ */
+export function youTubeEmbedUrl(
+  raw: string | undefined | null,
+  options: {
+    autoplay?: boolean;
+    muted?: boolean;
+    controls?: boolean;
+    loop?: boolean;
+    /** live/broadcast surfaces want the chrome-free look */
+    modestBranding?: boolean;
+  } = {},
+): string | null {
+  const url = normalizeUrl((raw ?? '').trim());
+  if (!url) return null;
+  const videoId = youTubeId(url);
+  if (!videoId) return null;
+
+  const query = new URLSearchParams({ playsinline: '1', rel: '0' });
+  if (options.autoplay) query.set('autoplay', '1');
+  if (options.muted) query.set('mute', '1');
+  if (options.controls === false) query.set('controls', '0');
+  if (options.modestBranding) query.set('modestbranding', '1');
+  if (options.loop) {
+    query.set('loop', '1');
+    // YouTube only loops a single video when it is also the playlist.
+    query.set('playlist', videoId);
+  }
+
+  return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?${query.toString()}`;
+}
+
 function vimeoId(url: URL): string | null {
   const host = url.hostname.replace(/^www\./, '');
   if (host === 'vimeo.com' || host === 'player.vimeo.com') {
@@ -231,6 +267,42 @@ function isMuxPlaybackId(value: string): boolean {
 }
 
 /**
+ * Resolve a broadcast source to exactly one player.
+ *
+ * A live stream is either a YouTube broadcast, or a stream the browser can play
+ * itself (a direct file, an HLS playlist, or a local MediaStream captured as a
+ * blob URL). Callers render the branch this returns and nothing else, so a
+ * broadcast can never stack an iframe on top of a `<video>` element.
+ */
+export type LiveStreamSource =
+  | { kind: 'youtube'; embedUrl: string; originalUrl: string }
+  | { kind: 'native'; url: string; hls: boolean }
+  | { kind: 'none' };
+
+export function parseLiveStreamSource(raw: string | undefined | null): LiveStreamSource {
+  const value = (raw ?? '').trim();
+  if (!value) return { kind: 'none' };
+
+  // A captured MediaStream (WebRTC / getUserMedia) is handed to the native
+  // element as a blob URL — there is nothing to parse.
+  if (value.startsWith('blob:')) return { kind: 'native', url: value, hls: false };
+
+  const embedUrl = youTubeEmbedUrl(value, { autoplay: true, modestBranding: true });
+  if (embedUrl) return { kind: 'youtube', embedUrl, originalUrl: value };
+
+  const url = normalizeUrl(value);
+  if (!url) return { kind: 'none' };
+
+  if (/\.m3u8$/i.test(url.pathname)) return { kind: 'native', url: url.toString(), hls: true };
+  if (bunnyHlsUrl(value)) return { kind: 'native', url: bunnyHlsUrl(value) as string, hls: true };
+  if (directVideoExtension(url)) return { kind: 'native', url: url.toString(), hls: false };
+
+  // Any other link is not something a video element can play, so the caller
+  // shows its own placeholder rather than an empty player.
+  return { kind: 'none' };
+}
+
+/**
  * Classify a video URL so the player knows whether to use a native <video>
  * tag, a platform iframe embed, or a fallback link.
  */
@@ -274,7 +346,7 @@ export function parseVideoSource(raw: string | undefined | null): VideoSource {
       kind: 'embed',
       provider: 'youtube',
       videoId: yt,
-      embedUrl: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(yt)}?${query.toString()}`,
+      embedUrl: `https://www.youtube.com/embed/${encodeURIComponent(yt)}?${query.toString()}`,
       originalUrl: url.toString(),
     };
   }

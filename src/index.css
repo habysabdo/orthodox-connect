@@ -62,11 +62,45 @@
   --shadow-card: 0 10px 40px -12px rgba(0, 0, 0, 0.6);
 }
 
+/* Ancient — a parchment reading mode drawn from illuminated manuscripts. It is a
+   light theme (never carries `dark`), so the `:root:not(.dark)` legibility
+   overrides further down apply to it as well. */
+[data-theme='ancient'] {
+  color-scheme: light;
+  --ink-50: 42 28 13;
+  --ink-100: 58 39 19;
+  --ink-200: 84 60 31;
+  --ink-300: 110 83 48;
+  --ink-400: 140 112 73;
+  --ink-500: 177 150 109;
+  --ink-600: 214 192 152;
+  --ink-700: 226 207 170;
+  --ink-750: 234 218 185;
+  --ink-800: 240 226 196;
+  --ink-850: 246 235 210;
+  --ink-900: 250 241 221;
+  --ink-950: 238 224 192;
+  --gold-50: 250 243 219;
+  --gold-100: 244 231 190;
+  --gold-200: 231 208 143;
+  --gold-300: 213 184 106;
+  --gold-400: 177 141 58;
+  --gold-500: 149 117 42;
+  --gold-600: 123 95 32;
+  --gold-700: 95 73 24;
+  --gold-800: 66 50 16;
+  --gold-900: 40 30 9;
+  --shadow-gold: 0 0 0 1px rgba(123, 95, 32, 0.4), 0 8px 26px rgba(84, 60, 31, 0.2);
+  --shadow-glow: 0 0 24px rgba(177, 141, 58, 0.28);
+  --shadow-card: 0 18px 45px -28px rgba(70, 48, 22, 0.42), 0 2px 8px rgba(70, 48, 22, 0.1);
+}
+
 html,
 body,
 #root {
   height: 100%;
 }
+
 
 body {
   margin: 0;
@@ -79,6 +113,15 @@ body {
 
 * {
   box-sizing: border-box;
+}
+
+/* A faint aged-paper mottling so parchment reads as parchment and not as beige. */
+[data-theme='ancient'] body {
+  background-image:
+    radial-gradient(ellipse at 12% 8%, rgba(140, 112, 73, 0.1), transparent 42%),
+    radial-gradient(ellipse at 88% 22%, rgba(123, 95, 32, 0.08), transparent 38%),
+    radial-gradient(ellipse at 50% 96%, rgba(84, 60, 31, 0.09), transparent 46%);
+  background-attachment: fixed;
 }
 
 html.theme-transition,

@@ -1,5 +1,5 @@
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
-import { ArrowLeft, Bookmark, Film, Heart, Loader2, MessageSquare, Send, Share2, Volume2 } from 'lucide-react';
+import { ArrowLeft, Bookmark, Film, Heart, Loader2, MessageSquare, Music2, Send, Share2, Volume2, VolumeX } from 'lucide-react';
 import { Avatar } from './ui';
 import { VideoPlayer, type VideoPlayerHandle } from './VideoPlayer';
 import { useStore } from '@/store/context';
@@ -162,6 +162,10 @@ export function ReelsView() {
       return;
     }
 
+    // A reel takes over playback once it fills more than 80% of the viewport, and
+    // gives it up the moment it drops below that — so exactly one video plays and
+    // everything scrolled away is paused.
+    const ACTIVE_VISIBILITY = 0.8;
     const visibility = new Map<string, number>();
     const observer = new IntersectionObserver(
       (entries) => {
@@ -171,7 +175,7 @@ export function ReelsView() {
         });
 
         let focusedId: string | null = null;
-        let focusedRatio = 0.6;
+        let focusedRatio = ACTIVE_VISIBILITY;
         visibleReels.forEach((reel) => {
           const ratio = visibility.get(reel.id) ?? 0;
           if (ratio >= focusedRatio) {
@@ -181,7 +185,7 @@ export function ReelsView() {
         });
         setActiveReelId(focusedId);
       },
-      { root, threshold: 0.6 },
+      { root, threshold: [0, ACTIVE_VISIBILITY] },
     );
 
     visibleReels.forEach((reel) => {
@@ -241,7 +245,10 @@ export function ReelsView() {
       >
         <ArrowLeft size={16} /> Feed
       </button>
-      <div ref={scrollRef} className="no-scrollbar h-screen snap-y snap-mandatory overflow-y-scroll bg-black overscroll-y-contain">
+      <div
+        ref={scrollRef}
+        className="no-scrollbar mx-auto h-[calc(100vh-64px)] w-full max-w-md snap-y snap-mandatory overflow-y-scroll overscroll-y-contain rounded-2xl bg-black scroll-smooth"
+      >
         {visibleReels.map((post, index) => {
           const author = users.find((user) => user?.id === post.authorId);
           if (!author || !currentUserId) return null;
@@ -329,11 +336,17 @@ function ReelCard({
   const liked = likes.includes(currentUserId);
   const reelVideoUrl = postVideoUrl(post);
   const reelPoster = bunnyPreviewUrl(reelVideoUrl) ?? bunnyPosterUrl(reelVideoUrl);
+  // Posts do not carry a music track, so the audio line credits the creator's own
+  // sound the way the vertical feeds people are used to do.
+  const audioTrackTitle = `Original audio · ${userName(author)}`;
 
   useEffect(() => {
     const player = videoRef.current;
     if (!player) return;
+    // Scrolled out of view: pause, and rewind so the reel restarts from the top
+    // the next time it becomes the active one.
     if (!isActive) {
+      player.pause();
       player.reset();
       setIsPlaying(false);
       return;
@@ -399,6 +412,24 @@ function ReelCard({
       .catch(() => undefined);
   };
 
+  /** The right-hand sound button, independent of tap-to-unmute on the video. */
+  const toggleSound = () => {
+    const player = videoRef.current;
+    const nextMuted = !isEffectivelyMuted;
+    setPrefersMutedGlobal(nextMuted);
+    setIsEffectivelyMuted(nextMuted);
+    setAutoPlayBlocked(false);
+    player?.setMuted(nextMuted);
+    if (nextMuted || !player) return;
+    void player.play()
+      .then(() => setIsPlaying(true))
+      .catch(() => {
+        player.setMuted(true);
+        handleAutoPlayBlocked();
+        void player.play().catch(() => undefined);
+      });
+  };
+
   const submitComment = () => {
     const text = comment.trim();
     if (!text) return;
@@ -442,7 +473,7 @@ function ReelCard({
       ref={assignRef}
       data-reel-id={post.id}
       onPointerUp={handlePointerUp}
-      className="relative grid h-screen min-h-screen touch-pan-y snap-start place-items-center overflow-hidden bg-black"
+      className="relative flex h-full w-full touch-pan-y snap-start snap-always items-center justify-center overflow-hidden bg-black"
     >
       <ReelVideoBoundary fallback={<ReelVideoFallback poster={reelPoster} processing={post.videoStatus === 'uploading'} />}>
         {!reelVideoUrl || post.videoStatus === 'uploading' || post.videoStatus === 'failed' || videoFailed ? (
@@ -454,17 +485,18 @@ function ReelCard({
             controls={false}
             autoPlay={isActive}
             loop
+            fill
             muted={isEffectivelyMuted}
             onPlay={() => setIsPlaying(true)}
             onError={() => setVideoFailed(true)}
             onAutoPlayBlocked={handleAutoPlayBlocked}
             onMutedChange={setIsEffectivelyMuted}
-            className="h-full w-full object-contain"
+            className="h-full w-full object-cover"
           />
         ) : (
           <div className="h-full w-full">
             {reelPoster ? (
-              <img src={reelPoster} alt="" loading="lazy" decoding="async" className="h-full w-full object-contain" />
+              <img src={reelPoster} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
             ) : (
               <ReelVideoFallback poster={null} />
             )}
@@ -504,6 +536,11 @@ function ReelCard({
         </div>
         {postText(post) && <p className="mt-3 line-clamp-3 whitespace-pre-wrap text-sm leading-relaxed text-white/90">{postText(post)}</p>}
 
+        <div className="mt-3 flex items-center gap-2 text-xs text-white/70">
+          <Music2 size={14} className="shrink-0 text-gold-200" aria-hidden="true" />
+          <span className="truncate">{audioTrackTitle}</span>
+        </div>
+
         {commentsOpen && (
           <div className="mt-3 max-h-44 overflow-y-auto rounded-2xl border border-white/10 bg-black/70 p-3 backdrop-blur-md">
             <div className="space-y-2">
@@ -535,7 +572,7 @@ function ReelCard({
 
       <div className="absolute bottom-6 right-4 z-10 flex flex-col gap-3 sm:right-6">
         <button onClick={() => toggleLike(post)} className="flex flex-col items-center gap-1 text-xs font-semibold text-white" aria-label={liked ? 'Unlike reel' : 'Like reel'}>
-          <span className={`grid h-12 w-12 place-items-center rounded-full border backdrop-blur-md ${liked ? 'border-gold-300/60 bg-gold-400/25 text-gold-200' : 'border-white/15 bg-black/45'}`}>
+          <span className={`grid h-12 w-12 place-items-center rounded-full border backdrop-blur-md transition-transform duration-200 active:scale-90 ${liked ? 'scale-105 border-gold-300/60 bg-gold-400/25 text-gold-200' : 'border-white/15 bg-black/45'}`}>
             <Heart size={22} className={liked ? 'fill-current' : ''} />
           </span>
           {/* With likes, the count sits in its own button below so it can open
@@ -548,7 +585,10 @@ function ReelCard({
             className="-mt-2 text-xs font-semibold text-white transition-colors hover:text-gold-200"
             aria-label={`See who liked this reel (${likes.length})`}
           >
-            {likes.length}
+            {/* Re-keying on the count replays the pop animation on every like. */}
+            <span key={likes.length} className="inline-block animate-scale-in">
+              {likes.length}
+            </span>
           </button>
         )}
         <button onClick={() => setCommentsOpen((open) => !open)} className="flex flex-col items-center gap-1 text-xs font-semibold text-white" aria-label="Show reel comments">
@@ -562,6 +602,17 @@ function ReelCard({
             <Share2 size={21} />
           </span>
           {shareCount || 'Share'}
+        </button>
+        <button
+          onClick={toggleSound}
+          className="flex flex-col items-center gap-1 text-xs font-semibold text-white"
+          aria-label={isEffectivelyMuted ? 'Unmute reel' : 'Mute reel'}
+          aria-pressed={!isEffectivelyMuted}
+        >
+          <span className="grid h-12 w-12 place-items-center rounded-full border border-white/15 bg-black/45 backdrop-blur-md transition hover:bg-black/65">
+            {isEffectivelyMuted ? <VolumeX size={21} /> : <Volume2 size={21} />}
+          </span>
+          {isEffectivelyMuted ? 'Sound off' : 'Sound on'}
         </button>
         <button onClick={() => setSaved((value) => !value)} className="flex flex-col items-center gap-1 text-xs font-semibold text-white" aria-label={saved ? 'Remove reel from saved' : 'Save reel'} aria-pressed={saved}>
           <span className={`grid h-12 w-12 place-items-center rounded-full border backdrop-blur-md transition hover:bg-black/65 ${saved ? 'border-gold-300/60 bg-gold-400/25 text-gold-200' : 'border-white/15 bg-black/45'}`}>
