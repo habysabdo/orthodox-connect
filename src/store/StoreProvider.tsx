@@ -37,6 +37,11 @@ import type { Notification } from '../types';
 import { createGroupRemote, loadGroups } from '../utils/groups';
 import { apiUrl } from '../lib/config';
 import { persistIdentityCookiesFromLocalStorage, restoreIdentitySession } from '../lib/auth';
+import {
+  clearLocalAuthStorage,
+  recoverFromUnauthorizedSession,
+  verifySupabaseSession,
+} from '../lib/sessionRecovery';
 import { clearCachedAppState, saveCachedAppState } from './persistence';
 import { postComments, postLikes, userName } from '../utils/postSafety';
 import { supabase } from '../lib/supabase';
@@ -48,6 +53,11 @@ const GOOGLE_PHOTOS = [
   'https://images.pexels.com/photos/733872/pexels-photo-733872.jpeg',
   'https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg',
 ];
+
+// The session is only re-verified this often while the app is being brought back
+// to the foreground, so switching between tabs cannot turn into a stream of
+// requests to the auth endpoint.
+const SESSION_RECHECK_INTERVAL_MS = 60_000;
 
 async function loadSessionUser(): Promise<User | null> {
   const response = await fetch(apiUrl(`/api/session?refresh=${Date.now()}`), { cache: 'no-store' });
@@ -78,11 +88,43 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // Safe fallback if already initialized or running in strict SSR
     }
 
+    // Everything a signed-out browser has to forget, in one place. The three
+    // ways a session can end — the member logging out, Supabase reporting
+    // SIGNED_OUT, and a refresh coming back 401 — all have to leave the same
+    // clean state behind, or the next login inherits the leftovers.
+    const resetToSignedOut = () => {
+      activeUserIdRef.current = null;
+      pendingPostIdsRef.current.clear();
+      postSavePromisesRef.current.clear();
+      clearCachedAppState();
+      dispatch({ type: 'SIGN_OUT' });
+      dispatch({ type: 'AUTH_CHECKED' });
+      if (window.location.pathname !== '/login') window.location.replace('/login');
+    };
+
+    // A session whose refresh was rejected can never repair itself, so sign it
+    // out and wipe the stored keys instead of leaving a dead token in place to
+    // fail the same way on every later request. What the member sees is the
+    // normal login form, ready for a clean sign in.
+    const handleExpiredSession = async (reason: string) => {
+      await recoverFromUnauthorizedSession(reason);
+      if (!active) return;
+      resetToSignedOut();
+    };
+
     const refresh = async () => {
       try {
-        const { error: supabaseSessionError } = await supabase.auth.getSession();
-        if (supabaseSessionError) {
-          console.warn('Failed to validate the Supabase session', supabaseSessionError);
+        const sessionCheck = await verifySupabaseSession();
+        if (!active) return;
+        if (sessionCheck.status === 'expired') {
+          await handleExpiredSession('the stored session was rejected while restoring it');
+          return;
+        }
+        if (sessionCheck.status === 'unknown') {
+          // Offline, or the auth endpoint is failing: the token itself may well
+          // be fine, so keep the session and let the automatic background
+          // refresh try again rather than signing anybody out over a bad network.
+          console.warn('Could not validate the Supabase session', sessionCheck.error);
         }
         const identity = await restoreIdentitySession();
         const user = identity?.id ? await loadSessionUser() : null;
@@ -101,13 +143,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const handleLogout = () => {
       persistIdentityCookiesFromLocalStorage();
       if (active) {
-        activeUserIdRef.current = null;
-        pendingPostIdsRef.current.clear();
-        postSavePromisesRef.current.clear();
-        clearCachedAppState();
-        dispatch({ type: 'SIGN_OUT' });
-        dispatch({ type: 'AUTH_CHECKED' });
-        if (window.location.pathname !== '/login') window.location.replace('/login');
+        resetToSignedOut();
       }
     };
 
@@ -143,20 +179,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!active) return;
       if (event === 'TOKEN_REFRESHED') return;
       if (event === 'SIGNED_OUT') {
-        activeUserIdRef.current = null;
-        pendingPostIdsRef.current.clear();
-        postSavePromisesRef.current.clear();
-        clearCachedAppState();
-        dispatch({ type: 'SIGN_OUT' });
-        dispatch({ type: 'AUTH_CHECKED' });
-        if (window.location.pathname !== '/login') window.location.replace('/login');
+        // Supabase also reports SIGNED_OUT when its own background refresh is
+        // rejected, so the stored keys are cleared here as well — synchronously,
+        // before the navigation below can unload the page.
+        clearLocalAuthStorage();
+        resetToSignedOut();
       }
     });
+
+    // A phone that has been asleep for days wakes up holding an access token
+    // that expired long ago, and it is the refresh on the first foreground
+    // request that comes back 401. Re-checking when the tab becomes visible
+    // handles that once, here, instead of letting every screen fail its own
+    // request against a session that is already gone.
+    let lastSessionCheck = Date.now();
+    const revalidateSession = async () => {
+      if (!active || document.visibilityState !== 'visible') return;
+      if (Date.now() - lastSessionCheck < SESSION_RECHECK_INTERVAL_MS) return;
+      lastSessionCheck = Date.now();
+
+      const sessionCheck = await verifySupabaseSession();
+      if (!active || sessionCheck.status !== 'expired') return;
+      await handleExpiredSession('the session could not be refreshed after the app returned to the foreground');
+    };
+    const handleForeground = () => void revalidateSession();
+    document.addEventListener('visibilitychange', handleForeground);
+    window.addEventListener('focus', handleForeground);
 
     return () => {
       active = false;
       netlifyIdentity.off('logout', handleLogout);
       netlifyIdentity.off('login', handleLogin);
+      document.removeEventListener('visibilitychange', handleForeground);
+      window.removeEventListener('focus', handleForeground);
       supabaseAuthListener.subscription.unsubscribe();
     };
   }, []);
@@ -423,6 +478,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         } catch (err) {
           console.error('Failed to sign out via identity', err);
         }
+        // Both sign out calls above can fail against an already-rejected token,
+        // which used to leave the stored session behind and put the member
+        // straight back into the loop they were signing out of.
+        clearLocalAuthStorage();
       },
 
       async refreshGroups() {
