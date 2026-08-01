@@ -1,4 +1,4 @@
-import { apiUrl } from '../lib/config';
+import { apiFetch } from '../lib/api';
 
 export interface FaithGif {
   id: string;
@@ -18,7 +18,7 @@ export async function searchFaithGifs(query: string, signal?: AbortSignal): Prom
   const params = new URLSearchParams();
   if (query.trim()) params.set('q', query.trim());
   const suffix = params.size ? `?${params.toString()}` : '';
-  const response = await fetch(apiUrl(`/api/gifs${suffix}`), { signal });
+  const response = await apiFetch(`/api/gifs${suffix}`, { signal });
   const payload = (await response.json().catch(() => ({}))) as GifSearchResponse;
   if (!response.ok) throw new Error(payload.error || 'Unable to load faith GIFs.');
   return payload.gifs ?? [];

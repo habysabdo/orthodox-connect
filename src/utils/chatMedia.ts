@@ -1,5 +1,5 @@
 import type { ChatAttachment, ChatAttachmentKind } from '../types';
-import { apiUrl } from '../lib/config';
+import { apiFetch } from '../lib/api';
 
 export async function uploadChatAttachment(
   file: Blob,
@@ -16,7 +16,7 @@ export async function uploadChatAttachment(
 
   for (let part = 0; part < partCount; part += 1) {
     const chunk = file.slice(part * chunkSize, Math.min(file.size, (part + 1) * chunkSize));
-    const response = await fetch(apiUrl(`/api/chat-media?uploadId=${uploadId}&part=${part}`), {
+    const response = await apiFetch(`/api/chat-media?uploadId=${uploadId}&part=${part}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/octet-stream' },
       body: chunk,
@@ -27,7 +27,7 @@ export async function uploadChatAttachment(
     }
   }
 
-  const response = await fetch(apiUrl('/api/chat-media'), {
+  const response = await apiFetch('/api/chat-media', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

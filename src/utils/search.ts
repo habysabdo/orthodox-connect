@@ -1,6 +1,6 @@
 // Client for the global multi-category search endpoint.
 
-import { apiUrl } from '../lib/config';
+import { apiFetch } from '../lib/api';
 
 export interface SearchPerson {
   id: string;
@@ -67,7 +67,7 @@ function normalizeResults(raw: unknown): SearchResults {
 export async function search(query: string, signal?: AbortSignal): Promise<SearchResults> {
   const q = query.trim();
   if (!q) return EMPTY_RESULTS;
-  const res = await fetch(apiUrl(`/api/search?q=${encodeURIComponent(q)}`), { signal });
+  const res = await apiFetch(`/api/search?q=${encodeURIComponent(q)}`, { signal });
   if (!res.ok) throw new Error('Search failed');
   return normalizeResults(await res.json());
 }

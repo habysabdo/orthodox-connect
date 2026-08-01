@@ -1,8 +1,8 @@
-import { apiUrl } from '../lib/config';
+import { apiFetch } from '../lib/api';
 
 // Persist profile updates to the server so they survive across devices and reloads.
 export async function saveUserProfile(userId: string, userData: unknown): Promise<void> {
-  const res = await fetch(apiUrl(`/api/profile?userId=${encodeURIComponent(userId)}`), {
+  const res = await apiFetch(`/api/profile?userId=${encodeURIComponent(userId)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(userData),
@@ -12,7 +12,7 @@ export async function saveUserProfile(userId: string, userData: unknown): Promis
 
 // Load a saved profile, e.g. on app startup.
 export async function loadUserProfile(userId: string): Promise<unknown | null> {
-  const res = await fetch(apiUrl(`/api/profile?userId=${encodeURIComponent(userId)}`));
+  const res = await apiFetch(`/api/profile?userId=${encodeURIComponent(userId)}`);
   if (!res.ok) throw new Error('Failed to load user profile');
   return res.json();
 }

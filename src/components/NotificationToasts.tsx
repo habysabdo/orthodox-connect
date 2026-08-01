@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Heart, MessageCircle, X } from 'lucide-react';
+import { Heart, MessageCircle, UserPlus, X } from 'lucide-react';
 import { Avatar } from './ui';
 import { useStore, getUser } from '@/store/context';
 import { useNotifications, useNotificationNavigate } from '@/store/notifications';
@@ -48,10 +48,16 @@ function ToastItem({ notification: n }: { notification: Notification }) {
         <Avatar src={actor?.photo ?? ''} name={n.actorName || 'Member'} size={40} ring="gold" />
         <span
           className={`absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full text-white ${
-            n.type === 'like' ? 'bg-red-500' : 'bg-gold-500'
+            n.type === 'like' ? 'bg-red-500' : n.type === 'follow' ? 'bg-sky-500' : 'bg-gold-500'
           }`}
         >
-          {n.type === 'like' ? <Heart size={10} className="fill-white" /> : <MessageCircle size={10} />}
+          {n.type === 'like' ? (
+            <Heart size={10} className="fill-white" />
+          ) : n.type === 'follow' ? (
+            <UserPlus size={10} />
+          ) : (
+            <MessageCircle size={10} />
+          )}
         </span>
       </div>
       <p className="min-w-0 flex-1 text-sm leading-snug text-ink-100">

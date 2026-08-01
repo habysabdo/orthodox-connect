@@ -1,14 +1,14 @@
 import type { DiscoverableGroup, Group, GroupMembershipStatus } from '../types';
-import { apiUrl } from '../lib/config';
+import { apiFetch } from '../lib/api';
 
 export async function loadGroups(): Promise<Group[]> {
-  const response = await fetch(apiUrl('/api/groups'));
+  const response = await apiFetch('/api/groups');
   if (!response.ok) throw new Error('Failed to load groups');
   return response.json();
 }
 
 export async function createGroupRemote(name: string, description: string): Promise<Group> {
-  const response = await fetch(apiUrl('/api/groups'), {
+  const response = await apiFetch('/api/groups', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, description }),
@@ -38,7 +38,7 @@ export async function discoverGroups(force = false): Promise<DiscoverableGroup[]
   if (!force && discoverCache && Date.now() - discoverCache.at < DISCOVER_TTL_MS) {
     return discoverCache.rows;
   }
-  const response = await fetch(apiUrl('/api/groups?discover=1'));
+  const response = await apiFetch('/api/groups?discover=1');
   if (!response.ok) throw new Error('Failed to load groups');
   const rows = (await response.json()) as DiscoverableGroup[];
   discoverCache = { at: Date.now(), rows };
@@ -48,7 +48,7 @@ export async function discoverGroups(force = false): Promise<DiscoverableGroup[]
 // Request to join a group. Returns the resulting membership status ('pending'
 // for a fresh request, or the existing status if one was already on file).
 export async function joinGroupRemote(groupId: string): Promise<GroupMembershipStatus> {
-  const response = await fetch(apiUrl('/api/groups'), {
+  const response = await apiFetch('/api/groups', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ groupId }),

@@ -143,6 +143,9 @@ export const chatAttachments = pgTable("chat_attachments", {
 // by the two user ids sorted and joined (`a__b`). `requester`/`addressee`
 // record the direction of the original request so each side can be shown the
 // right "incoming"/"outgoing" state; `status` is 'pending' until accepted.
+//
+// Superseded by `follows` below: members now follow each other directly, with
+// no request to approve. The table is kept so the historical graph survives.
 export const friendships = pgTable("friendships", {
   id: text("id").primaryKey(),
   requester: text("requester").notNull(),
@@ -151,6 +154,20 @@ export const friendships = pgTable("friendships", {
   since: bigint("since", { mode: "number" }),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+// Follows are one-directional and take effect immediately: `follower_id` follows
+// `following_id` the moment the row exists, with nothing to accept. The pair is
+// the primary key so following twice is a no-op, and both directions are indexed
+// because every profile shows a following count and a followers count.
+export const follows = pgTable("follows", {
+  followerId: text("follower_id").notNull(),
+  followingId: text("following_id").notNull(),
+  createdAt: bigint("created_at", { mode: "number" }).notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.followerId, table.followingId] }),
+  index("follows_follower_id_idx").on(table.followerId),
+  index("follows_following_id_idx").on(table.followingId),
+]);
 
 // Directory of Orthodox parishes, searchable from the global search bar.
 export const churches = pgTable("churches", {

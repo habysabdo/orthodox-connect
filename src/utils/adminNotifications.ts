@@ -1,5 +1,5 @@
 import type { AdminNotification } from '../types';
-import { apiUrl } from '../lib/config';
+import { apiFetch } from '../lib/api';
 
 export interface AdminNotificationFeed {
   notifications: AdminNotification[];
@@ -9,7 +9,7 @@ export interface AdminNotificationFeed {
 // Load the shared admin alert feed (recent alerts plus the full unread total).
 // The endpoint is admin-only, so a non-admin caller gets a 403 and this throws.
 export async function loadAdminNotifications(): Promise<AdminNotificationFeed> {
-  const res = await fetch(apiUrl('/api/admin-notifications'), {
+  const res = await apiFetch('/api/admin-notifications', {
     credentials: 'include',
     cache: 'no-store',
   });
@@ -20,7 +20,7 @@ export async function loadAdminNotifications(): Promise<AdminNotificationFeed> {
 // Clear every unread admin alert ("Mark all as read"). Alerts are shared, so
 // this clears the badge for every administrator.
 export async function markAllAdminNotificationsRead(): Promise<void> {
-  const res = await fetch(apiUrl('/api/admin-notifications'), {
+  const res = await apiFetch('/api/admin-notifications', {
     method: 'PATCH',
     credentials: 'include',
   });

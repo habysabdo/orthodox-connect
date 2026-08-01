@@ -27,17 +27,16 @@ import {
 } from '../utils/messages';
 import { publishMessageChange, subscribeToMessageChanges } from '../utils/messageRealtime';
 import {
-  deleteFriendship,
-  loadFriendships,
-  saveFriendship,
-} from '../utils/friendships';
+  followUser as followUserRemote,
+  loadFollows,
+  unfollowUser as unfollowUserRemote,
+} from '../utils/follows';
 import { createNotification } from '../utils/notifications';
 import type { Notification } from '../types';
 import { createGroupRemote, loadGroups } from '../utils/groups';
-import { apiUrl } from '../lib/config';
+import { apiFetch } from '../lib/api';
 import {
   AUTH_EVENTS,
-  identityAuthorizationHeaders,
   onAuthChange,
   persistIdentityCookiesFromLocalStorage,
   restoreIdentitySession,
@@ -73,11 +72,7 @@ type SessionOutcome =
 // screen instead of letting them in.
 async function loadSession({ retries = 0 }: { retries?: number } = {}): Promise<SessionOutcome> {
   for (let attempt = 0; ; attempt += 1) {
-    const response = await fetch(apiUrl(`/api/session?refresh=${Date.now()}`), {
-      cache: 'no-store',
-      credentials: 'same-origin',
-      headers: identityAuthorizationHeaders(),
-    });
+    const response = await apiFetch(`/api/session?refresh=${Date.now()}`, { cache: 'no-store' });
     if (response.ok) return { kind: 'user', user: (await response.json()) as User };
     if (response.status === 403) return { kind: 'forbidden' };
     if (response.status === 401) {
@@ -145,19 +140,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    // Restore the session on every page load, before anything renders or any
+    // query runs. The local Identity SDK failing to produce a user is not proof
+    // that the member signed out — the stored access token may simply have
+    // expired, and the API can still mint a new one from the refresh cookie.
+    // Signing out here on the first miss is what sent members who refreshed the
+    // browser back to the landing page.
     const refresh = async () => {
       try {
         const { error: supabaseSessionError } = await supabase.auth.getSession();
         if (supabaseSessionError) {
           console.warn('Failed to validate the Supabase session', supabaseSessionError);
         }
-        const identity = await restoreIdentitySession();
+        const identity = await restoreIdentitySession().catch((error) => {
+          console.warn('Could not restore the Identity session locally', error);
+          return null;
+        });
         if (!active) return;
-        if (!identity?.id) {
-          dispatch({ type: 'SIGN_OUT' });
-          return;
-        }
-        await syncSignedInUser(1);
+        // With a local session, retry once to cover the token being rewritten
+        // mid-flight. Without one, still ask the API: it authorizes from the
+        // refresh cookie and is the only thing that can say "signed out".
+        await syncSignedInUser(identity?.id ? 1 : 0);
       } catch (err) {
         console.error('Failed to restore session', err);
       } finally {
@@ -286,12 +289,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const stopPolling = startVisiblePolling(
       async () => {
-        const friendships = await loadFriendships(userId);
+        const graph = await loadFollows(userId);
         if (!cancelled && activeUserIdRef.current === userId) {
-          dispatch({ type: 'HYDRATE_FRIENDSHIPS', friendships });
+          dispatch({ type: 'HYDRATE_FOLLOWS', following: graph.following, followers: graph.followers });
         }
       },
-      { intervalMs: 25000, onError: (error) => console.error('Failed to load friendships', error) },
+      { intervalMs: 25000, onError: (error) => console.error('Failed to load follows', error) },
     );
     return () => {
       cancelled = true;
@@ -705,34 +708,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         deletePostRemote(postId).catch((err) => console.error('Failed to delete post', err));
       },
 
-      async addFriend(otherId) {
+      // Following is instant and one-directional: the button flips first, the row
+      // is written after, and a failure puts the button back the way it was.
+      async followUser(otherId) {
         const me = getCurrent();
-        if (!me) return;
+        if (!me || otherId === me.id) return;
+        if (stateRef.current.following.includes(otherId)) return;
+        dispatch({ type: 'FOLLOW_USER', userId: otherId });
         try {
-          await saveFriendship(me.id, otherId, 'pending');
-          dispatch({ type: 'ADD_FRIEND', from: me.id, to: otherId });
+          await followUserRemote(otherId);
+          emit({
+            userId: otherId,
+            actorId: me.id,
+            actorName: userName(me),
+            type: 'follow',
+            content: `${userName(me)} started following you`,
+          });
         } catch (err) {
-          console.error('Failed to save friend request', err);
+          console.error('Failed to follow member', err);
+          dispatch({ type: 'UNFOLLOW_USER', userId: otherId });
         }
       },
-      async acceptFriend(otherId) {
+      async unfollowUser(otherId) {
         const me = getCurrent();
         if (!me) return;
+        if (!stateRef.current.following.includes(otherId)) return;
+        dispatch({ type: 'UNFOLLOW_USER', userId: otherId });
         try {
-          await saveFriendship(otherId, me.id, 'accepted', Date.now());
-          dispatch({ type: 'ACCEPT_FRIEND', from: otherId, to: me.id });
+          await unfollowUserRemote(otherId);
         } catch (err) {
-          console.error('Failed to accept friend request', err);
-        }
-      },
-      async removeFriend(otherId) {
-        const me = getCurrent();
-        if (!me) return;
-        try {
-          await deleteFriendship(me.id, otherId);
-          dispatch({ type: 'REMOVE_FRIEND', a: me.id, b: otherId });
-        } catch (err) {
-          console.error('Failed to remove connection', err);
+          console.error('Failed to unfollow member', err);
+          dispatch({ type: 'FOLLOW_USER', userId: otherId });
         }
       },
 

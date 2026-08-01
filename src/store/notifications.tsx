@@ -134,11 +134,12 @@ export function useNotifications(): NotificationsState {
 // items and the floating toasts:
 //   • a 'like' jumps to the feed and highlights the liked post
 //   • a 'message' opens the DM thread with the sender
+//   • a 'follow' opens the new follower's profile, so the member can follow back
 // The notification is marked read as a side effect of following it.
 export function useNotificationNavigate() {
   const { markRead } = useNotifications();
   const { openThreadWith } = useStore();
-  const { setView, setOpenThreadId, setFocusedPostId, setRightOpen } = useUI();
+  const { setView, setOpenThreadId, setFocusedPostId, setRightOpen, openProfile } = useUI();
 
   return useCallback(
     (n: Notification) => {
@@ -150,9 +151,11 @@ export function useNotificationNavigate() {
         const tid = n.threadId || openThreadWith(n.actorId);
         setOpenThreadId(tid);
         setView('messenger');
+      } else if (n.type === 'follow') {
+        openProfile(n.actorId);
       }
       setRightOpen(false);
     },
-    [markRead, openThreadWith, setView, setOpenThreadId, setFocusedPostId, setRightOpen],
+    [markRead, openProfile, openThreadWith, setView, setOpenThreadId, setFocusedPostId, setRightOpen],
   );
 }

@@ -1,16 +1,16 @@
 import type { ChatMessage, Thread } from '../types';
-import { apiUrl } from '../lib/config';
+import { apiFetch } from '../lib/api';
 
 // Load every persisted chat message (chronological) from the database.
 export async function loadMessages(): Promise<ChatMessage[]> {
-  const res = await fetch(apiUrl('/api/messages'));
+  const res = await apiFetch('/api/messages');
   if (!res.ok) throw new Error('Failed to load messages');
   return res.json();
 }
 
 // Persist a single newly sent message.
 export async function saveMessage(message: ChatMessage): Promise<void> {
-  const res = await fetch(apiUrl('/api/messages'), {
+  const res = await apiFetch('/api/messages', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(message),
@@ -19,7 +19,7 @@ export async function saveMessage(message: ChatMessage): Promise<void> {
 }
 
 export async function markMessagesRead(threadId: string, messageIds: string[]): Promise<{ messageIds: string[]; readAt: number }> {
-  const res = await fetch(apiUrl('/api/messages'), {
+  const res = await apiFetch('/api/messages', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ threadId, messageIds }),
@@ -42,7 +42,7 @@ export async function publishIncomingCall(
   }
 ): Promise<void> {
   try {
-    await fetch(apiUrl('/api/call-signal'), {
+    await apiFetch('/api/call-signal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ recipientId, ...callData }),

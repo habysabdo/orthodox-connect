@@ -1,4 +1,5 @@
-import { SUPABASE_ANON_KEY, SUPABASE_URL, apiUrl } from '../lib/config';
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from '../lib/config';
+import { apiFetch } from '../lib/api';
 import { compressImageFile } from './imageCompression';
 
 // Photos never pass through this site's own functions. `/api/image-upload` only
@@ -115,7 +116,7 @@ async function requestUploadTarget(
 ): Promise<UploadTarget> {
   let response: Response;
   try {
-    response = await fetch(apiUrl('/api/image-upload'), {
+    response = await apiFetch('/api/image-upload', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

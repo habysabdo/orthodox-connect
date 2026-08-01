@@ -1,5 +1,5 @@
 import * as UpChunk from '@mux/upchunk';
-import { apiUrl } from '../lib/config';
+import { apiFetch } from '../lib/api';
 import {
   MAX_VIDEO_SIZE_BYTES,
   MAX_VIDEO_SIZE_LABEL,
@@ -61,7 +61,7 @@ async function createDirectUpload(file: File): Promise<{ uploadUrl: string; uplo
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const createRes = await fetch(apiUrl('/api/mux-upload'), {
+      const createRes = await apiFetch('/api/mux-upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -128,7 +128,7 @@ function putToMux(uploadUrl: string, file: File, onFraction: (fraction: number) 
 async function pollForPlaybackId(uploadId: string, onFraction: (fraction: number) => void): Promise<string> {
   const deadline = Date.now() + POLL_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    const res = await fetchWithTimeout(apiUrl(`/api/mux-asset?uploadId=${encodeURIComponent(uploadId)}`), 10_000);
+    const res = await fetchWithTimeout(`/api/mux-asset?uploadId=${encodeURIComponent(uploadId)}`, 10_000);
     if (res.ok) {
       const data = (await res.json()) as { status?: string; playbackId?: string | null; error?: string };
       if (data.playbackId) return data.playbackId;
@@ -145,11 +145,11 @@ async function pollForPlaybackId(uploadId: string, onFraction: (fraction: number
   throw new Error('The video was not ready before the processing timeout. Please try again.');
 }
 
-async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+async function fetchWithTimeout(path: string, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { signal: controller.signal, cache: 'no-store' });
+    return await apiFetch(path, { signal: controller.signal, cache: 'no-store' });
   } finally {
     window.clearTimeout(timeout);
   }

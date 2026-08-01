@@ -1,6 +1,6 @@
 import { Eye, MessageCircle, X } from 'lucide-react';
 import { Avatar } from './ui';
-import { useStore, friendsOf, unreadCountFor, threadForUsers } from '@/store/context';
+import { useStore, connectedUsers, unreadCountFor, threadForUsers } from '@/store/context';
 import { useUI } from '@/store/ui';
 import { clockTime, liveDuration } from '@/utils/format';
 import { userName } from '@/utils/postSafety';
@@ -14,7 +14,8 @@ export function RightSidebar({ onClose }: { onClose?: () => void }) {
   if (!me) return null;
 
   const activeStreams = state.streams.filter((s) => s?.active);
-  const friends = friendsOf(state, me.id);
+  // Anybody the member follows or is followed by can be messaged.
+  const friends = connectedUsers(state);
   const unread = unreadCountFor(state, me.id);
 
   return (
@@ -91,7 +92,7 @@ export function RightSidebar({ onClose }: { onClose?: () => void }) {
         <div className="flex-1 overflow-y-auto scrollbar-thin">
           {friends.length === 0 && (
             <div className="px-4 py-6 text-center text-xs text-ink-400">
-              Add friends to start chatting.
+              Follow people to start chatting.
             </div>
           )}
           {friends.map((f) => {
