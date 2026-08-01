@@ -7,6 +7,7 @@ import { NotificationBell } from './NotificationBell';
 import { AdminNotificationBell } from './AdminNotificationBell';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { hasAdminAccess } from '@/utils/users';
+import { registerOneSignalMember } from '@/utils/oneSignal';
 import { ErrorBoundary } from './ErrorBoundary';
 
 // Route views, sidebars, search, and overlays are fetched only when rendered.
@@ -55,6 +56,17 @@ export function AppShell() {
   useEffect(() => {
     if (view === 'admin' && !adminAccess) setView('feed');
   }, [adminAccess, setView, view]);
+
+  // Sign-in is the moment to ask about background alerts: the member is here, the
+  // gesture that brought them in is recent, and the shell only renders once they
+  // are authenticated — so the subscription can be tied to their account straight
+  // away. Unconfigured or unsupported browsers fall through silently.
+  useEffect(() => {
+    if (!currentUserId) return;
+    void registerOneSignalMember(currentUserId).catch((error) =>
+      console.warn('Background notifications could not be set up on this device.', error),
+    );
+  }, [currentUserId]);
 
   useEffect(() => {
     const groupList = Array.isArray(groups) ? groups : [];

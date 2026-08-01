@@ -43,6 +43,7 @@ import {
   signOutIdentity,
 } from '../lib/auth';
 import { clearCachedAppState, saveCachedAppState } from './persistence';
+import { unregisterOneSignalMember } from '../utils/oneSignal';
 import { postComments, postLikes, userName } from '../utils/postSafety';
 import { supabase } from '../lib/supabase';
 import { startVisiblePolling } from '../utils/visiblePolling';
@@ -494,6 +495,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         postSavePromisesRef.current.clear();
         clearCachedAppState();
         dispatch({ type: 'SIGN_OUT' });
+        // Background alerts are addressed to the member, not the device, so the
+        // device has to be unlinked or the next person on it keeps receiving them.
+        void unregisterOneSignalMember().catch(() => undefined);
         void supabase.auth.signOut().catch((err) => console.error('Failed to clear the Supabase session', err));
         void signOutIdentity().catch((err) => console.error('Failed to sign out via identity', err));
       },

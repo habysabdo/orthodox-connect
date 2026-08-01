@@ -9,5 +9,11 @@
 /sw.js
   Cache-Control: public, max-age=0, must-revalidate
 
+# The push worker must be revalidated too, so an updated OneSignal worker is
+# picked up instead of being served from a stale cache for a year.
+/OneSignalSDKWorker.js
+  Cache-Control: public, max-age=0, must-revalidate
+  Service-Worker-Allowed: /
+
 /assets/*
   Cache-Control: public, max-age=31536000, immutable

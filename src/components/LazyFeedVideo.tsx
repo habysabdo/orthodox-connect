@@ -6,6 +6,14 @@ import { bunnyPosterUrl, bunnyPreviewUrl } from '@/utils/bunny';
 
 const FEED_VIDEO_PLAY_EVENT = 'orthodox-connect:feed-video-play';
 
+/**
+ * The box a feed video occupies before there is anything to play in it. A poster,
+ * a placeholder and the player itself all share it, so a post never reflows as it
+ * moves between those states and never collapses to a zero-height black strip
+ * while it waits.
+ */
+const FEED_VIDEO_FRAME_CLASSES = 'w-full aspect-video overflow-hidden rounded-xl bg-black';
+
 interface LazyFeedVideoProps {
   /** a post's `video` field; an absent or empty value renders nothing */
   url?: string | null;
@@ -98,11 +106,15 @@ export function LazyFeedVideo({
 
   if (!videoUrl) return null;
 
+  // Callers size the frame themselves (feed cards square off the corners, the
+  // admin promo list rounds them); anything that does not gets the shared 16:9 box.
+  const frameClassName = `${FEED_VIDEO_FRAME_CLASSES} ${posterClassName || className}`;
+
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative w-full">
       {playbackFailed ? (
         <div
-          className={`relative flex flex-col items-center justify-center gap-3 overflow-hidden bg-black px-6 text-center text-white ${posterClassName || className}`}
+          className={`relative flex flex-col items-center justify-center gap-3 px-6 text-center text-white ${frameClassName}`}
           role="alert"
         >
           {preview ? <img src={preview} alt="" className="absolute inset-0 h-full w-full object-contain opacity-30" /> : null}
@@ -128,7 +140,7 @@ export function LazyFeedVideo({
           name="Feed video"
           resetKeys={[videoUrl]}
           fallback={(reset) => (
-            <div className={`grid place-items-center bg-black px-6 text-center ${posterClassName || className}`} role="alert">
+            <div className={`grid place-items-center px-6 text-center ${frameClassName}`} role="alert">
               <div>
                 <AlertCircle size={30} className="mx-auto text-red-300" aria-hidden="true" />
                 <p className="mt-3 text-sm font-semibold text-white">Video playback unavailable</p>
@@ -166,7 +178,7 @@ export function LazyFeedVideo({
             setAutoPlay(true);
             setActive(true);
           }}
-          className={`group relative flex w-full items-center justify-center overflow-hidden bg-black ${posterClassName || className}`}
+          className={`group relative flex items-center justify-center ${frameClassName}`}
           aria-label={title ? `Play ${title}` : 'Play video'}
         >
           {preview ? (

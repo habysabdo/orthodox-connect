@@ -69,6 +69,20 @@ declare global {
 
 let youTubeApiPromise: Promise<void> | null = null;
 
+/**
+ * Sizing every video frame shares: a full-width 16:9 black box that clips its
+ * own corners. Without an explicit box a `<video>` with no metadata yet collapses
+ * to the element's intrinsic 300×150 default (or to zero height inside a flex
+ * parent), which reads as a broken black rectangle.
+ */
+const VIDEO_FRAME_CLASSES = 'w-full aspect-video overflow-hidden rounded-xl bg-black';
+
+/** How long a native player may show nothing before it is treated as unplayable. */
+const STALLED_VIDEO_TIMEOUT_MS = 15_000;
+
+/** Any of these means the element has something real to show. */
+const READY_EVENTS = ['loadedmetadata', 'loadeddata', 'canplay', 'playing', 'error'] as const;
+
 function buildEmbedUrl(raw: string | undefined | null): URL | null {
   const value = (raw ?? '').trim();
   if (!value) return null;
@@ -179,7 +193,7 @@ function LinkPreviewCard({
 
 function VideoUnavailable({ className, onRetry }: { className: string; onRetry?: () => void }) {
   return (
-    <div className={`relative grid min-h-52 place-items-center overflow-hidden rounded-lg bg-black px-6 text-center ${className}`} role="alert">
+    <div className={`relative grid min-h-52 place-items-center ${VIDEO_FRAME_CLASSES} px-6 text-center ${className}`} role="alert">
       <div>
         <AlertCircle size={30} className="mx-auto text-red-300" aria-hidden="true" />
         <p className="mt-3 text-sm font-semibold text-white">Video playback unavailable</p>
@@ -335,7 +349,7 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
 
   if (loading) {
     return (
-      <div className={`grid min-h-52 place-items-center overflow-hidden rounded-lg bg-ink-950 ${className}`} aria-label="Loading video preview">
+      <div className={`grid min-h-52 place-items-center ${VIDEO_FRAME_CLASSES} !bg-ink-950 ${className}`} aria-label="Loading video preview">
         <div className="flex items-center gap-2 text-xs font-medium text-ink-400">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-ink-600 border-t-gold-300" />
           Loading video preview
@@ -435,6 +449,37 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
     setPlaybackFailed(true);
     onErrorRef.current?.();
   }, []);
+
+  // A `<video>` element can sit mounted with nothing decoded and never fire an
+  // `error` event — a Bunny upload whose renditions are still encoding, a URL
+  // that resolves but never streams, a codec the device silently refuses. That
+  // is the endless black screen a member sees on a video post: a black box, no
+  // first frame, no message. Give the element a fixed grace period to produce at
+  // least metadata, then take the same route a hard playback error takes: the
+  // hosted player if there is one, otherwise the fallback placeholder.
+  useEffect(() => {
+    const player = nativeVideoRef.current;
+    if (!player || !src || playbackFailed) return;
+
+    const timer = window.setTimeout(() => {
+      // HAVE_METADATA or better means dimensions and a first frame exist, so the
+      // player is showing the video rather than an empty black box.
+      if (player.readyState >= 1) return;
+      if (bunnyHostedPlayerUrl(src) && failedDirectSrc !== src) {
+        setFailedDirectSrc(src);
+        return;
+      }
+      console.warn('Video produced no playable frame in time', { url: src });
+      reportFinalError();
+    }, STALLED_VIDEO_TIMEOUT_MS);
+
+    const cancel = () => window.clearTimeout(timer);
+    for (const event of READY_EVENTS) player.addEventListener(event, cancel);
+    return () => {
+      cancel();
+      for (const event of READY_EVENTS) player.removeEventListener(event, cancel);
+    };
+  }, [failedDirectSrc, playbackFailed, reportFinalError, src]);
 
   useEffect(() => {
     const player = nativeVideoRef.current;
@@ -596,7 +641,7 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
           '--controls': controls ? undefined : 'none',
           ...(fill ? { '--media-object-fit': 'cover' } : {}),
         }}
-        className={fill ? `h-full w-full ${className}` : `w-full aspect-video rounded-lg ${className}`}
+        className={fill ? `h-full w-full ${className}` : `${VIDEO_FRAME_CLASSES} ${className}`}
       />
     );
   }
@@ -633,6 +678,7 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
 
   if (!src) return <div className={className} aria-hidden="true" />;
   const poster = bunnyPosterUrl(src) ?? undefined;
+  const openInNewTab = /^https?:\/\//i.test(src) ? src : undefined;
 
   return (
     <video
@@ -645,8 +691,12 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
       muted={muted}
       playsInline
       {...({ 'webkit-playsinline': 'true' } as Record<string, string>)}
-      preload="none"
-      style={fill ? { width: '100%', height: '100%', objectFit: 'cover' } : { width: '100%', objectFit: 'contain', aspectRatio: '16 / 9' }}
+      // `none` left a direct file with no poster showing a black box until the
+      // member pressed play — and pressing play on a file that never loads left
+      // it black for good. `metadata` fetches enough to paint the first frame the
+      // `#t=0.1` hint asks for, and gives the watchdog above something to observe.
+      preload="metadata"
+      style={fill ? { objectFit: 'cover' } : { objectFit: 'contain' }}
       onPlay={onPlay}
       onCanPlay={(event) => {
         if (!autoPlay || !event.currentTarget.paused) return;
@@ -662,8 +712,19 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
           reportFinalError();
         }
       }}
-      className={`bg-black ${fill ? '' : 'rounded-lg'} ${className}`}
-    />
+      className={`${fill ? 'h-full w-full bg-black object-cover' : VIDEO_FRAME_CLASSES} ${className}`}
+    >
+      {/* Shown only by a browser that cannot play the element at all, so it never
+          leaves a member looking at an empty frame with no explanation. */}
+      <p className="p-4 text-center text-sm text-white/80">
+        This video cannot be played in this browser.{' '}
+        {openInNewTab ? (
+          <a href={openInNewTab} target="_blank" rel="noreferrer noopener" className="underline">
+            Open the video file directly
+          </a>
+        ) : null}
+      </p>
+    </video>
   );
 });
 
