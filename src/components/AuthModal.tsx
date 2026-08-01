@@ -2,6 +2,11 @@ import React, { useState } from 'react';
 import { Mail, Lock, User, UserPlus, LogIn, AlertCircle } from 'lucide-react';
 import netlifyIdentity from 'netlify-identity-widget';
 import { persistIdentityCookiesFromLocalStorage } from '../lib/auth';
+import {
+  clearLocalAuthStorage,
+  clearSessionExpiredNotice,
+  hasSessionExpiredNotice,
+} from '../lib/sessionRecovery';
 
 type GoTrueClient = {
   login: (email: string, password: string, remember?: boolean) => Promise<unknown>;
@@ -75,13 +80,18 @@ export const AuthModal: React.FC = () => {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState(() =>
+    // A member who was signed out by a failed refresh arrives here without
+    // having asked to, so the form opens by explaining why.
+    hasSessionExpiredNotice() ? 'Your session expired, so you were signed out. Please log in again.' : '',
+  );
   const [busy, setBusy] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setNotice('');
+    clearSessionExpiredNotice();
 
     setBusy(true);
     let navigating = false;
@@ -91,6 +101,12 @@ export const AuthModal: React.FC = () => {
         setError('Sign in is unavailable right now. Please reload the page and try again.');
         return;
       }
+
+      // This form is only reachable while nobody is signed in, so any session
+      // still on disk is a leftover from a refresh that failed. Dropping it
+      // first means this attempt starts from a clean slate instead of having
+      // GoTrue reuse a token the server has already rejected.
+      clearLocalAuthStorage();
 
       if (isRegister) {
         const created = await gotrue.signup(email, password, { full_name: fullName });
