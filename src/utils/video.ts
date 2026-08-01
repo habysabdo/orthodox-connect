@@ -290,7 +290,7 @@ export function parseVideoSource(raw: string | undefined | null): VideoSource {
     return {
       kind: 'embed',
       provider: 'facebook',
-      embedUrl: `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(facebookUrl)}`,
+      embedUrl: `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(facebookUrl)}&show_text=false&appId=&parent=${window.location.hostname}`,
       originalUrl: facebookUrl,
     };
   }
