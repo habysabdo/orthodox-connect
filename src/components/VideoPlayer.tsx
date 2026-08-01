@@ -2,7 +2,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import type Hls from 'hls.js';
 import MuxPlayer, { type MuxPlayerRefAttributes } from '@mux/mux-player-react';
 import { AlertCircle, ExternalLink, Film, Play, RotateCcw } from 'lucide-react';
-import { parseVideoSource, type VideoSource } from '@/utils/video';
+import { extractYouTubeVideoId, parseVideoSource, type VideoSource } from '@/utils/video';
 import { bunnyHlsUrl, bunnyHostedPlayerUrl, bunnyPosterUrl } from '@/utils/bunny';
 
 export interface VideoPlayerHandle {
@@ -134,9 +134,14 @@ function LinkPreviewCard({
   }, [url]);
   const label = fallbackLabel(provider);
   const isFacebook = provider === 'facebook';
+  const youTubeId = provider === 'youtube' ? extractYouTubeVideoId(url) : null;
+  const previewImage = preview?.image || (youTubeId ? `https://i.ytimg.com/vi/${youTubeId}/hqdefault.jpg` : '');
+  const [imageFailed, setImageFailed] = useState(false);
   const description = preview?.description || (isFacebook
     ? 'This post may be private, restricted, or unavailable in the in-app viewer.'
     : '');
+
+  useEffect(() => setImageFailed(false), [previewImage]);
 
   return (
     <a
@@ -146,11 +151,12 @@ function LinkPreviewCard({
       className={`group relative flex min-h-52 flex-col justify-end overflow-hidden rounded-lg bg-ink-950 text-left ${className}`}
       aria-label={label}
     >
-      {preview?.image ? (
+      {previewImage && !imageFailed ? (
         <img
-          src={preview.image}
+          src={previewImage}
           alt=""
           referrerPolicy="no-referrer"
+          onError={() => setImageFailed(true)}
           className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
         />
       ) : (
@@ -196,7 +202,7 @@ function VideoUnavailable({ className, onRetry }: { className: string; onRetry?:
   );
 }
 
-const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { source: Extract<VideoSource, { kind: 'embed' | 'iframe' }> }>(function ExternalVideoPlayer({
+const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { source: Extract<VideoSource, { kind: 'embed' | 'iframe' | 'link-preview' }> }>(function ExternalVideoPlayer({
   source,
   className = '',
   controls = true,
@@ -205,7 +211,6 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
   muted = false,
   title = 'Video',
   onPlay,
-  onError,
   onAutoPlayBlocked,
 }, ref) {
   const [preview, setPreview] = useState<LinkPreview | null>(null);
@@ -215,15 +220,16 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
   const iframeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const youTubePlayerRef = useRef<YouTubePlayer | null>(null);
 
-  const initialProvider = source.kind === 'embed' ? source.provider : 'external';
+  const initialProvider = source.kind === 'embed' || source.kind === 'link-preview' ? source.provider : 'external';
   const resolvedSource = useMemo(
     () => parseVideoSource(preview?.resolvedUrl || source.originalUrl),
     [preview?.resolvedUrl, source.originalUrl],
   );
-  const provider = resolvedSource.kind === 'embed' ? resolvedSource.provider : initialProvider;
+  const provider = resolvedSource.kind === 'embed' || resolvedSource.kind === 'link-preview'
+    ? resolvedSource.provider
+    : preview?.provider || initialProvider;
   const externalUrl = preview?.resolvedUrl || source.originalUrl;
   const needsPreview = source.kind === 'iframe';
-  const shouldFetchPreview = needsPreview || initialProvider === 'facebook';
 
   const clearIframeTimeout = useCallback(() => {
     if (iframeTimeoutRef.current === null) return;
@@ -234,15 +240,12 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
   const handleIframeFailure = useCallback(() => {
     clearIframeTimeout();
     setIframeFailed(true);
-    onError?.();
-  }, [clearIframeTimeout, onError]);
+  }, [clearIframeTimeout]);
 
   useEffect(() => {
     setPreview(null);
     setIframeFailed(false);
     setLoading(needsPreview);
-    if (!shouldFetchPreview) return;
-
     const controller = new AbortController();
     fetch(`/api/link-preview?url=${encodeURIComponent(source.originalUrl)}`, { signal: controller.signal })
       .then(async (response) => {
@@ -255,17 +258,17 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [needsPreview, shouldFetchPreview, source.originalUrl]);
+  }, [needsPreview, source.originalUrl]);
 
   const canEmbed = resolvedSource.kind === 'embed';
 
   useEffect(() => {
     clearIframeTimeout();
-    if (!canEmbed || resolvedSource.kind !== 'embed' || resolvedSource.provider !== 'facebook' || iframeFailed) return;
+    if (!canEmbed || iframeFailed) return;
 
     iframeTimeoutRef.current = setTimeout(handleIframeFailure, 12_000);
     return clearIframeTimeout;
-  }, [canEmbed, clearIframeTimeout, handleIframeFailure, iframeFailed, resolvedSource]);
+  }, [canEmbed, clearIframeTimeout, handleIframeFailure, iframeFailed]);
 
   useEffect(() => {
     if (!canEmbed || resolvedSource.kind !== 'embed' || resolvedSource.provider !== 'youtube' || !iframeRef.current) return;
@@ -348,6 +351,8 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
     return <LinkPreviewCard url={externalUrl} preview={preview} provider={provider} className={className} />;
   }
   if (resolvedSource.provider === 'youtube') {
+    embedUrl.searchParams.set('enablejsapi', '1');
+    embedUrl.searchParams.set('origin', window.location.origin);
     embedUrl.searchParams.set('controls', controls ? '1' : '0');
     embedUrl.searchParams.set('autoplay', autoPlay ? '1' : '0');
     embedUrl.searchParams.set('mute', muted ? '1' : '0');
@@ -373,7 +378,7 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
   );
 });
 
-const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { source: Exclude<VideoSource, { kind: 'embed' | 'iframe' }> }>(function HostedVideoPlayer({
+const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { source: Exclude<VideoSource, { kind: 'embed' | 'iframe' | 'link-preview' }> }>(function HostedVideoPlayer({
   source,
   url,
   className = '',
@@ -426,6 +431,10 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
   const reportFinalError = useCallback(() => {
     setPlaybackFailed(true);
     onErrorRef.current?.();
+  }, []);
+
+  const handleHostedIframeFailure = useCallback(() => {
+    setPlaybackFailed(true);
   }, []);
 
   useEffect(() => {
@@ -562,7 +571,12 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
     });
   }, [autoPlay, muted, onAutoPlayBlocked, source.kind]);
 
-  if (playbackFailed) return <VideoUnavailable className={className} onRetry={handleRetry} />;
+  if (playbackFailed) {
+    if (source.kind === 'hosted-iframe' || hostedFallbackUrl) {
+      return <LinkPreviewCard url={source.kind === 'hosted-iframe' ? source.originalUrl : src} preview={null} provider="external" className={className} />;
+    }
+    return <VideoUnavailable className={className} onRetry={handleRetry} />;
+  }
 
   if (source.kind === 'mux') {
     return (
@@ -613,7 +627,7 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
           allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
           allowFullScreen
           referrerPolicy="strict-origin-when-cross-origin"
-          onError={reportFinalError}
+          onError={handleHostedIframeFailure}
           className="absolute inset-0 h-full w-full border-0"
         />
       </div>
@@ -658,7 +672,7 @@ const HostedVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { sou
 
 export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function VideoPlayer(props, ref) {
   const source = parseVideoSource(props.url);
-  if (source.kind === 'embed' || source.kind === 'iframe') {
+  if (source.kind === 'embed' || source.kind === 'iframe' || source.kind === 'link-preview') {
     return <ExternalVideoPlayer ref={ref} {...props} source={source} />;
   }
   return <HostedVideoPlayer ref={ref} {...props} source={source} />;

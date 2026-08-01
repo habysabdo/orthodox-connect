@@ -209,8 +209,6 @@ export default async (req: Request) => {
     const description = metaContent(html, 'og:description') || metaContent(html, 'description') || metaContent(html, 'twitter:description');
     const image = absoluteUrl(metaContent(html, 'og:image') || metaContent(html, 'twitter:image'), resolvedUrl);
     const siteName = metaContent(html, 'og:site_name') || (provider === 'facebook' ? 'Facebook' : resolvedUrl.hostname.replace(/^www\./, ''));
-    const unavailable = /content isn't available|page isn't available|log in to facebook/i.test(`${title} ${description}`);
-
     const preview: LinkPreview = {
       url: requestedUrl.toString(),
       resolvedUrl: resolvedUrl.toString(),
@@ -219,7 +217,7 @@ export default async (req: Request) => {
       image,
       siteName,
       provider,
-      embeddable: provider === 'facebook' && !unavailable && Boolean(title || image),
+      embeddable: false,
     };
     return Response.json(preview, { headers: { 'Cache-Control': 'private, max-age=3600' } });
   } catch (error) {
