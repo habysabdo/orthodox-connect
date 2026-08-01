@@ -20,13 +20,17 @@ export const AuthModal: React.FC = () => {
     try {
       netlifyIdentity.init();
 
-      // Listen for successful login event to automatically close the modal and refresh session cookies
+      // Ensure modal auto-closes and reloads when Netlify Identity fires login
       netlifyIdentity.on('login', () => {
-        netlifyIdentity.close();
+        try {
+          netlifyIdentity.close();
+        } catch {
+          // Safe fallback
+        }
         window.location.reload();
       });
 
-      // Open Netlify Identity modal to issue valid authentication cookies to /api/session
+      // Open Netlify Identity modal to perform authentication
       netlifyIdentity.open(isRegister ? 'signup' : 'login');
     } catch (err) {
       console.error('Authentication failed', err);

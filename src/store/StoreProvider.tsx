@@ -60,8 +60,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
 
   // Keep a live ref so action callbacks always read the freshest state,
-  // regardless of how the actions memo is memoized. This prevents stale
-  // closures that caused the post-login blank screen.
+  // regardless of how the actions memo is memoized.
   const stateRef = useRef(state);
   stateRef.current = state;
   const activeUserIdRef = useRef(state.currentUserId);
@@ -112,7 +111,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    const handleLogin = () => {
+    const handleLogin = (user: any) => {
       // Automatically close the Netlify Identity widget modal overlay
       try {
         netlifyIdentity.close();
@@ -121,12 +120,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       persistIdentityCookiesFromLocalStorage();
       loadSessionUser()
-        .then((user) => {
+        .then((sessionUser) => {
           if (!active) return;
-          if (user) dispatch({ type: 'SIGN_IN', user });
+          if (sessionUser) {
+            dispatch({ type: 'SIGN_IN', user: sessionUser });
+          } else if (user) {
+            // Fallback: reload page to ensure cookie synchronization with /api/session
+            window.location.reload();
+          }
           dispatch({ type: 'AUTH_CHECKED' });
         })
-        .catch((err) => console.error('Failed to sync session', err));
+        .catch((err) => {
+          console.error('Failed to sync session', err);
+          window.location.reload();
+        });
     };
 
     netlifyIdentity.on('logout', handleLogout);
