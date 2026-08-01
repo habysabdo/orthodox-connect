@@ -24,6 +24,7 @@
     "drizzle-orm": "^1.0.0-beta.22",
     "hls.js": "~1.6.15",
     "lucide-react": "^0.344.0",
+    "netlify-identity-widget": "^2.0.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-easy-crop": "^5.5.7",

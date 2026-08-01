@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react';
-import { AUTH_EVENTS, logout, onAuthChange } from '@netlify/identity';
+import netlifyIdentity from 'netlify-identity-widget';
 import { type CalendarEvent, type ChatAttachment, type CommunityAlert, type Post, type User } from '../types';
 import {
   StoreContext,
@@ -71,6 +71,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
+
+    // Initialize netlifyIdentity widget if not initialized
+    try {
+      netlifyIdentity.init();
+    } catch {
+      // Safe fallback if already initialized or running in strict SSR
+    }
+
     const refresh = async () => {
       try {
         const { error: supabaseSessionError } = await supabase.auth.getSession();
@@ -90,21 +98,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     };
     refresh();
-    const unsubscribe = onAuthChange((event) => {
-      persistIdentityCookiesFromLocalStorage();
-      if (event === AUTH_EVENTS.LOGOUT) {
-        if (active) {
-          activeUserIdRef.current = null;
-          pendingPostIdsRef.current.clear();
-          postSavePromisesRef.current.clear();
-          clearCachedAppState();
-          dispatch({ type: 'SIGN_OUT' });
-          dispatch({ type: 'AUTH_CHECKED' });
-          if (window.location.pathname !== '/login') window.location.replace('/login');
-        }
-        return;
-      }
 
+    const handleLogout = () => {
+      persistIdentityCookiesFromLocalStorage();
+      if (active) {
+        activeUserIdRef.current = null;
+        pendingPostIdsRef.current.clear();
+        postSavePromisesRef.current.clear();
+        clearCachedAppState();
+        dispatch({ type: 'SIGN_OUT' });
+        dispatch({ type: 'AUTH_CHECKED' });
+        if (window.location.pathname !== '/login') window.location.replace('/login');
+      }
+    };
+
+    const handleLogin = () => {
+      persistIdentityCookiesFromLocalStorage();
       loadSessionUser()
         .then((user) => {
           if (!active) return;
@@ -112,7 +121,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           dispatch({ type: 'AUTH_CHECKED' });
         })
         .catch((err) => console.error('Failed to sync session', err));
-    });
+    };
+
+    netlifyIdentity.on('logout', handleLogout);
+    netlifyIdentity.on('login', handleLogin);
 
     const { data: supabaseAuthListener } = supabase.auth.onAuthStateChange((event) => {
       if (!active) return;
@@ -130,7 +142,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     return () => {
       active = false;
-      unsubscribe();
+      netlifyIdentity.off('logout', handleLogout);
+      netlifyIdentity.off('login', handleLogin);
       supabaseAuthListener.subscription.unsubscribe();
     };
   }, []);
@@ -148,11 +161,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, [state.authChecked, state.currentUserId, state.postsCache, state.postsHasMoreCache, state.users]);
 
-  // Hydrate the signed-in user's profile from the database, so edits (like bio)
-  // survive reloads and follow the user across devices. A member who has no
-  // profile row yet (their very first sign-in) is registered immediately by
-  // saving their starter profile, so they appear in everyone else's directory
-  // and suggested connections right away.
+  // Hydrate the signed-in user's profile from the database
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -190,9 +199,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .catch((err) => console.error('Failed to load groups', err));
   }, [state.currentUserId]);
 
-  // Keep the community roster in sync with the real registered members in the
-  // database. Polling means a member who signs up in another session shows up
-  // in Suggested Connections and becomes available for messaging within moments.
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -212,8 +218,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [state.currentUserId]);
 
-  // Load the social graph from the perspective of the signed-in member and keep
-  // it fresh so incoming friend requests appear without a manual reload.
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -233,10 +237,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [state.currentUserId]);
 
-  // Load the active space's feed. Returning to a space already visited shows
-  // its cached posts instantly (no skeleton, no blank flash) while a background
-  // refresh keeps it current; a space visited for the first time shows the feed
-  // skeleton until its posts arrive.
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -310,8 +310,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [state.currentUserId, state.activeGroupId]);
 
-  // Chat messages are shared across every space, so they load once per session
-  // (not on every space switch) to avoid duplicate fetches.
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -357,7 +355,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (user) dispatch({ type: 'SIGN_IN', user });
           else {
             dispatch({ type: 'SIGN_OUT' });
-            logout().catch(() => undefined);
+            try {
+              netlifyIdentity.logout();
+            } catch {
+              // Safe fallback
+            }
           }
         })
         .catch((error) => console.error('Failed to verify session', error));
@@ -373,9 +375,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const getCurrent = (): User | undefined =>
       stateRef.current.users.find((u) => u?.id === stateRef.current.currentUserId);
 
-    // Persist a notification for a recipient. Fire-and-forget: the recipient's
-    // client picks it up on its next poll (badge + toast). Never notifies the
-    // actor about their own action.
     const emit = (n: Omit<Notification, 'id' | 'createdAt' | 'isRead'>) => {
       if (!n.userId || n.userId === n.actorId) return;
       const notification: Notification = {
@@ -406,7 +405,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         clearCachedAppState();
         dispatch({ type: 'SIGN_OUT' });
         void supabase.auth.signOut().catch((err) => console.error('Failed to clear the Supabase session', err));
-        logout().catch((err) => console.error('Failed to sign out', err));
+        try {
+          netlifyIdentity.logout();
+        } catch (err) {
+          console.error('Failed to sign out via identity', err);
+        }
       },
 
       async refreshGroups() {
@@ -562,8 +565,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const me = getCurrent();
         if (!me) return;
         const post = stateRef.current.posts.find((p) => p.id === postId) ?? sourcePost;
-        // Read the pre-toggle state to tell a like from an unlike, so a
-        // notification only fires when the member is adding a like.
         const currentLikes = postLikes(post);
         const isNewLike = post ? !currentLikes.includes(me.id) : false;
         dispatch({ type: 'TOGGLE_LIKE', postId, userId: me.id });
@@ -666,7 +667,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           readAt: null,
         };
         dispatch({ type: 'SEND_MESSAGE', message });
-        // Notify the other participant that they have a new direct message.
         const recipient = threadId.split('__').find((id) => id !== me.id);
         saveMessage(message)
           .then(() => {
@@ -791,7 +791,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
 export { useStore };
 
-// helper for the Landing page demo
 export function pickGooglePhoto(seed: string): string {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
