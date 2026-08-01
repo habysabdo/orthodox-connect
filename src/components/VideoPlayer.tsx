@@ -201,11 +201,12 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
   muted = false,
   title = 'Video',
   onPlay,
+  onError,
   onAutoPlayBlocked,
 }, ref) {
   const [preview, setPreview] = useState<LinkPreview | null>(null);
-  const [loading, setLoading] = useState(source.kind === 'iframe' || (source.kind === 'embed' && source.provider !== 'vimeo'));
-  const [failed, setFailed] = useState(false);
+  const [loading, setLoading] = useState(source.kind === 'iframe');
+  const [iframeFailed, setIframeFailed] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const youTubePlayerRef = useRef<YouTubePlayer | null>(null);
 
@@ -216,11 +217,11 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
   );
   const provider = resolvedSource.kind === 'embed' ? resolvedSource.provider : initialProvider;
   const externalUrl = preview?.resolvedUrl || source.originalUrl;
-  const needsPreview = source.kind === 'iframe' || initialProvider === 'youtube' || initialProvider === 'facebook';
+  const needsPreview = source.kind === 'iframe';
 
   useEffect(() => {
     setPreview(null);
-    setFailed(false);
+    setIframeFailed(false);
     setLoading(needsPreview);
     if (!needsPreview) return;
 
@@ -231,18 +232,14 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
         return response.json() as Promise<LinkPreview>;
       })
       .then((metadata) => setPreview(metadata))
-      .catch((error: unknown) => {
-        if (!(error instanceof DOMException && error.name === 'AbortError')) setFailed(true);
-      })
+      .catch(() => undefined)
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
   }, [needsPreview, source.originalUrl]);
 
-  const canEmbed = resolvedSource.kind === 'embed' && (
-    resolvedSource.provider === 'vimeo' || Boolean(preview?.embeddable)
-  );
+  const canEmbed = resolvedSource.kind === 'embed';
 
   useEffect(() => {
     if (!canEmbed || resolvedSource.kind !== 'embed' || resolvedSource.provider !== 'youtube' || !iframeRef.current) return;
@@ -258,7 +255,8 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
               if (autoPlay) youTubePlayerRef.current?.playVideo();
             },
             onError: () => {
-              setFailed(true);
+              setIframeFailed(true);
+              onError?.();
             },
             onAutoplayBlocked: onAutoPlayBlocked,
             onStateChange: (event) => {
@@ -267,16 +265,14 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
           },
         });
       })
-      .catch(() => {
-        setFailed(true);
-      });
+      .catch(() => undefined);
 
     return () => {
       disposed = true;
       youTubePlayerRef.current?.destroy();
       youTubePlayerRef.current = null;
     };
-  }, [autoPlay, canEmbed, muted, onAutoPlayBlocked, onPlay, resolvedSource]);
+  }, [autoPlay, canEmbed, muted, onAutoPlayBlocked, onError, onPlay, resolvedSource]);
 
   useEffect(() => {
     const player = youTubePlayerRef.current;
@@ -318,7 +314,7 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
     );
   }
 
-  if (failed || !canEmbed || resolvedSource.kind !== 'embed') {
+  if (iframeFailed || !canEmbed || resolvedSource.kind !== 'embed') {
     return <LinkPreviewCard url={externalUrl} preview={preview} provider={provider} className={className} />;
   }
 
@@ -345,7 +341,8 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
         allowFullScreen
         referrerPolicy="strict-origin-when-cross-origin"
         onError={() => {
-          setFailed(true);
+          setIframeFailed(true);
+          onError?.();
         }}
         className="absolute inset-0 h-full w-full border-0"
       />
