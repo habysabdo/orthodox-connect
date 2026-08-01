@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type Hls from 'hls.js';
 import { SimulatedCanvas } from './SimulatedCanvas';
+import { VideoUnavailable } from './VideoFrame';
 import { parseLiveStreamSource } from '@/utils/video';
 
 /**
@@ -25,6 +26,16 @@ export function LiveStreamPlayer({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const nativeUrl = source.kind === 'native' ? source.url : null;
   const needsHls = source.kind === 'native' && source.hls;
+  // A broadcast whose stream drops — the host ended it, the playlist expired, the
+  // codec is refused — used to leave the element mounted on a black rectangle with
+  // no explanation. `failed` swaps in the shared placeholder instead, and its
+  // retry re-mounts the element so a stream that comes back can be picked up.
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [nativeUrl]);
 
   useEffect(() => {
     const player = videoRef.current;
@@ -42,18 +53,34 @@ export function LiveStreamPlayer({
 
     void import('hls.js')
       .then(({ default: HlsPlayer }) => {
-        if (disposed || !HlsPlayer.isSupported()) return;
+        if (disposed) return;
+        if (!HlsPlayer.isSupported()) {
+          setFailed(true);
+          return;
+        }
         instance = new HlsPlayer({ enableWorker: true, lowLatencyMode: true });
+        instance.on(HlsPlayer.Events.ERROR, (_event, data) => {
+          if (!data.fatal || disposed) return;
+          if (data.type === HlsPlayer.ErrorTypes.NETWORK_ERROR) {
+            instance?.startLoad();
+            return;
+          }
+          if (data.type === HlsPlayer.ErrorTypes.MEDIA_ERROR) {
+            instance?.recoverMediaError();
+            return;
+          }
+          setFailed(true);
+        });
         instance.loadSource(nativeUrl);
         instance.attachMedia(player);
       })
-      .catch(() => undefined);
+      .catch(() => setFailed(true));
 
     return () => {
       disposed = true;
       instance?.destroy();
     };
-  }, [nativeUrl, needsHls]);
+  }, [attempt, nativeUrl, needsHls]);
 
   if (source.kind === 'youtube') {
     return (
@@ -71,14 +98,30 @@ export function LiveStreamPlayer({
   }
 
   if (nativeUrl) {
+    if (failed) {
+      return (
+        <VideoUnavailable
+          className={className}
+          description="This broadcast is not streaming right now."
+          onRetry={() => {
+            setFailed(false);
+            setAttempt((count) => count + 1);
+          }}
+        />
+      );
+    }
+
     return (
       <video
+        key={attempt}
         ref={videoRef}
         src={needsHls ? undefined : nativeUrl}
         autoPlay
         controls
         playsInline
+        preload="metadata"
         {...({ 'webkit-playsinline': 'true' } as Record<string, string>)}
+        onError={() => setFailed(true)}
         className={`bg-black object-contain ${className}`}
       />
     );

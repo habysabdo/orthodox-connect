@@ -12,8 +12,40 @@ import {
   type PushStatus,
 } from '@/utils/pushNotifications';
 
-const PUSH_PROMPT_DISMISSED_KEY = 'oc.pushPromptDismissed';
+const NOTIFICATION_PROMPT_DISMISSED_KEY = 'notification_prompt_dismissed';
+/** Where the dismissal used to live: per tab, so it came back on the next visit. */
+const LEGACY_PROMPT_DISMISSED_KEY = 'oc.pushPromptDismissed';
 const IOS_DISMISS_KEY = 'oc.iosPushInstallDismissed';
+
+/** The browser's own permission state, or 'denied' where notifications don't exist. */
+function notificationPermission(): NotificationPermission {
+  if (typeof window === 'undefined' || typeof window.Notification === 'undefined') return 'denied';
+  return window.Notification.permission;
+}
+
+/**
+ * True once this device has answered the alerts prompt in any way — allowed it,
+ * blocked it, or closed it. Storage access throws in some privacy modes, where
+ * there is nothing to remember and the prompt behaves as it did before.
+ */
+function notificationPromptDismissed(): boolean {
+  try {
+    if (localStorage.getItem(NOTIFICATION_PROMPT_DISMISSED_KEY) === 'true') return true;
+    // Honour the old per-tab flag once so a member who already said no is not
+    // asked again just because the key moved.
+    return sessionStorage.getItem(LEGACY_PROMPT_DISMISSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function dismissNotificationPrompt(): void {
+  try {
+    localStorage.setItem(NOTIFICATION_PROMPT_DISMISSED_KEY, 'true');
+  } catch {
+    // Storage is unavailable; the prompt stays hidden for this page view only.
+  }
+}
 
 export function NotificationBell({ activeThreadId }: { activeThreadId: string | null }) {
   const store = useStore();
@@ -39,16 +71,18 @@ export function NotificationBell({ activeThreadId }: { activeThreadId: string | 
         setShowIosBanner(localStorage.getItem(IOS_DISMISS_KEY) !== '1');
         return;
       }
-      if (nextStatus === 'disabled' && window.Notification.permission === 'granted') {
+      if (nextStatus === 'disabled' && notificationPermission() === 'granted') {
         void enablePushNotifications()
           .then((syncedStatus) => setPushStatus(syncedStatus))
           .catch(() => undefined);
         return;
       }
+      // The banner is a one-time ask: only before the browser has been asked at
+      // all, and only until this device has answered it once.
       if (
         nextStatus === 'disabled' &&
-        window.Notification.permission === 'default' &&
-        sessionStorage.getItem(PUSH_PROMPT_DISMISSED_KEY) !== '1'
+        notificationPermission() === 'default' &&
+        !notificationPromptDismissed()
       ) {
         setShowPushPrompt(true);
       }
@@ -109,6 +143,13 @@ export function NotificationBell({ activeThreadId }: { activeThreadId: string | 
       const nextStatus = await enablePushNotifications();
       setPushStatus(nextStatus);
       setShowPushPrompt(false);
+      // The ask is spent. A member who allowed or blocked alerts has answered the
+      // browser dialog, and a member whose attempt could not reach it — push is
+      // not configured on the server, or the request failed — still pressed the
+      // button. Remembering that is what stops the banner reappearing on every
+      // refresh and every page change; the Enable button inside this panel stays
+      // available for anyone who wants to try again deliberately.
+      dismissNotificationPrompt();
       if (nextStatus === 'enabled') {
         setPushMessage('Lock-screen alerts are enabled on this device.');
         void updatePushPresence(activeThreadId).catch(() => undefined);
@@ -133,7 +174,7 @@ export function NotificationBell({ activeThreadId }: { activeThreadId: string | 
 
   const dismissPushPrompt = () => {
     setShowPushPrompt(false);
-    sessionStorage.setItem(PUSH_PROMPT_DISMISSED_KEY, '1');
+    dismissNotificationPrompt();
   };
 
   const dismissIosBanner = () => {

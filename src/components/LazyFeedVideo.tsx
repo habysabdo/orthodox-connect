@@ -2,17 +2,10 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { AlertCircle, Play } from 'lucide-react';
 import { VideoPlayer, type VideoPlayerHandle } from './VideoPlayer';
 import { ErrorBoundary } from './ErrorBoundary';
+import { VIDEO_FRAME_CLASSES } from './VideoFrame';
 import { bunnyPosterUrl, bunnyPreviewUrl } from '@/utils/bunny';
 
 const FEED_VIDEO_PLAY_EVENT = 'orthodox-connect:feed-video-play';
-
-/**
- * The box a feed video occupies before there is anything to play in it. A poster,
- * a placeholder and the player itself all share it, so a post never reflows as it
- * moves between those states and never collapses to a zero-height black strip
- * while it waits.
- */
-const FEED_VIDEO_FRAME_CLASSES = 'w-full aspect-video overflow-hidden rounded-xl bg-black';
 
 interface LazyFeedVideoProps {
   /** a post's `video` field; an absent or empty value renders nothing */
@@ -108,7 +101,7 @@ export function LazyFeedVideo({
 
   // Callers size the frame themselves (feed cards square off the corners, the
   // admin promo list rounds them); anything that does not gets the shared 16:9 box.
-  const frameClassName = `${FEED_VIDEO_FRAME_CLASSES} ${posterClassName || className}`;
+  const frameClassName = `${VIDEO_FRAME_CLASSES} ${posterClassName || className}`;
 
   return (
     <div ref={containerRef} className="relative w-full">

@@ -1,9 +1,11 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import type Hls from 'hls.js';
 import MuxPlayer, { type MuxPlayerRefAttributes } from '@mux/mux-player-react';
-import { AlertCircle, ExternalLink, Film, Play, RotateCcw } from 'lucide-react';
 import { parseVideoSource, type VideoSource } from '@/utils/video';
 import { bunnyHlsUrl, bunnyHostedPlayerUrl, bunnyPosterUrl } from '@/utils/bunny';
+import { VIDEO_FRAME_CLASSES, VideoUnavailable } from './VideoFrame';
+import { LinkPreviewCard, type LinkPreviewMetadata } from './LinkPreviewCard';
+import { apiFetch } from '@/lib/api';
 
 export interface VideoPlayerHandle {
   play: () => Promise<void>;
@@ -32,16 +34,6 @@ interface VideoPlayerProps {
   onMutedChange?: (muted: boolean) => void;
 }
 
-type LinkPreview = {
-  resolvedUrl: string;
-  title: string;
-  description: string;
-  image: string;
-  siteName: string;
-  provider: 'youtube' | 'facebook' | 'external';
-  embeddable: boolean;
-};
-
 type YouTubePlayer = {
   playVideo: () => void;
   pauseVideo: () => void;
@@ -68,14 +60,6 @@ declare global {
 }
 
 let youTubeApiPromise: Promise<void> | null = null;
-
-/**
- * Sizing every video frame shares: a full-width 16:9 black box that clips its
- * own corners. Without an explicit box a `<video>` with no metadata yet collapses
- * to the element's intrinsic 300×150 default (or to zero height inside a flex
- * parent), which reads as a broken black rectangle.
- */
-const VIDEO_FRAME_CLASSES = 'w-full aspect-video overflow-hidden rounded-xl bg-black';
 
 /** How long a native player may show nothing before it is treated as unplayable. */
 const STALLED_VIDEO_TIMEOUT_MS = 15_000;
@@ -126,91 +110,6 @@ function loadYouTubeApi(): Promise<void> {
   return youTubeApiPromise;
 }
 
-function fallbackLabel(provider: LinkPreview['provider'] | 'vimeo'): string {
-  if (provider === 'facebook') return 'Watch video on Facebook';
-  if (provider === 'youtube') return 'Watch video on YouTube';
-  if (provider === 'vimeo') return 'Watch video on Vimeo';
-  return 'Open link';
-}
-
-function LinkPreviewCard({
-  url,
-  preview,
-  provider,
-  className,
-}: {
-  url: string;
-  preview: LinkPreview | null;
-  provider: LinkPreview['provider'] | 'vimeo';
-  className: string;
-}) {
-  const hostname = useMemo(() => {
-    try {
-      return new URL(url).hostname.replace(/^www\./, '');
-    } catch {
-      return '';
-    }
-  }, [url]);
-  const label = fallbackLabel(provider);
-
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noreferrer noopener"
-      className={`group relative flex min-h-52 flex-col justify-end overflow-hidden rounded-lg bg-ink-950 text-left ${className}`}
-      aria-label={label}
-    >
-      {preview?.image ? (
-        <img
-          src={preview.image}
-          alt=""
-          referrerPolicy="no-referrer"
-          className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-        />
-      ) : (
-        <div className="absolute inset-0 grid place-items-center bg-[radial-gradient(circle_at_top_left,rgba(212,175,55,0.24),transparent_48%),linear-gradient(135deg,#1b2430,#090d12)]">
-          <Film size={46} className="text-gold-300/70" aria-hidden="true" />
-        </div>
-      )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-black/10" />
-      <div className="relative z-10 p-4 sm:p-5">
-        <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-gold-300">
-          <Play size={12} fill="currentColor" aria-hidden="true" />
-          {preview?.siteName || hostname || 'External video'}
-        </div>
-        <h3 className="line-clamp-2 text-base font-semibold text-white sm:text-lg">
-          {preview?.title || 'This video is available on the original site'}
-        </h3>
-        {preview?.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-white/70">{preview.description}</p>}
-        <span className="mt-4 inline-flex items-center gap-2 rounded-lg bg-gold-400 px-3.5 py-2 text-xs font-bold text-ink-950 transition group-hover:bg-gold-300">
-          {label} <ExternalLink size={14} aria-hidden="true" />
-        </span>
-      </div>
-    </a>
-  );
-}
-
-function VideoUnavailable({ className, onRetry }: { className: string; onRetry?: () => void }) {
-  return (
-    <div className={`relative grid min-h-52 place-items-center ${VIDEO_FRAME_CLASSES} px-6 text-center ${className}`} role="alert">
-      <div>
-        <AlertCircle size={30} className="mx-auto text-red-300" aria-hidden="true" />
-        <p className="mt-3 text-sm font-semibold text-white">Video playback unavailable</p>
-        <p className="mt-1 text-xs text-white/60">Keep scrolling to watch the next reel or try retrying.</p>
-        {onRetry && (
-          <button
-            onClick={onRetry}
-            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-gold-400 px-3 py-1.5 text-xs font-bold text-ink-950 hover:bg-gold-300 transition"
-          >
-            <RotateCcw size={14} /> Retry
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
 const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { source: Extract<VideoSource, { kind: 'embed' | 'iframe' }> }>(function ExternalVideoPlayer({
   source,
   className = '',
@@ -237,7 +136,7 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
   // "this video is available on the original site".
   const needsPreview = source.kind === 'iframe';
 
-  const [preview, setPreview] = useState<LinkPreview | null>(null);
+  const [preview, setPreview] = useState<LinkPreviewMetadata | null>(null);
   const [loading, setLoading] = useState(needsPreview);
   const [failed, setFailed] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -262,10 +161,10 @@ const ExternalVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps & { s
     if (!needsPreview) return;
 
     const controller = new AbortController();
-    fetch(`/api/link-preview?url=${encodeURIComponent(source.originalUrl)}`, { signal: controller.signal })
+    apiFetch(`/api/link-preview?url=${encodeURIComponent(source.originalUrl)}`, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error('Preview unavailable');
-        return response.json() as Promise<LinkPreview>;
+        return response.json() as Promise<LinkPreviewMetadata>;
       })
       .then((metadata) => setPreview(metadata))
       .catch((error: unknown) => {
