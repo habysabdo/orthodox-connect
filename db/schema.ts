@@ -40,7 +40,9 @@ export const posts = pgTable("posts", {
   id: text("id").primaryKey(),
   data: jsonb("data").notNull(),
   content: text("content").notNull().default(""),
-  authorId: text("author_id").notNull().default(""),
+  authorId: text("author_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   groupId: text("group_id"),
   postType: text("post_type").notNull().default("regular"),
   status: text("status").notNull().default("approved"),
