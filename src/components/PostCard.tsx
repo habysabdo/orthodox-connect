@@ -84,11 +84,24 @@ export function PostCard({ post }: { post: Post }) {
   const imageUrl = postImageUrl(post);
   const videoUrl = postVideoUrl(post);
   const linkedText = linkifyText(bodyText);
+
   // A meeting invite renders its own card, so the invite link in the body is not
   // also turned into a link preview.
   const embeddedVideoUrl = post.meeting
     ? null
     : extractEmbeddedVideoUrl(bodyText) ?? extractExternalUrl(bodyText);
+
+  // Filter out the embedded link so it doesn't print as raw text above the video card
+  const visibleLinkedText = linkedText.filter((part) => {
+    if (!embeddedVideoUrl) return true;
+    if (part.href && (part.href === embeddedVideoUrl || embeddedVideoUrl.includes(part.href) || part.href.includes(embeddedVideoUrl))) {
+      return false;
+    }
+    if (part.text.trim() === embeddedVideoUrl.trim()) return false;
+    return true;
+  });
+
+  const hasVisibleText = visibleLinkedText.some((part) => part.text.trim().length > 0);
 
   const submitComment = () => {
     if (!comment.trim()) return;
@@ -192,9 +205,9 @@ export function PostCard({ post }: { post: Post }) {
       )}
 
       {/* Text */}
-      {bodyText && (
+      {hasVisibleText && (
         <div className="whitespace-pre-wrap px-4 pb-3 text-[15px] leading-relaxed text-ink-100">
-          {linkedText.map((part, index) => part.href ? (
+          {visibleLinkedText.map((part, index) => part.href ? (
             <a
               key={`${part.href}-${index}`}
               href={part.href}

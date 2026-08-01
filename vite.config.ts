@@ -5,6 +5,7 @@ import { fileURLToPath, URL } from 'node:url';
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: '/',
   plugins: [
     react(),
     legacy({
@@ -14,6 +15,7 @@ export default defineConfig({
     }),
   ],
   build: {
+    outDir: 'dist',
     target: ['es2015', 'chrome70'],
   },
   resolve: {
