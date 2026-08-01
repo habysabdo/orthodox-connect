@@ -35,8 +35,8 @@ export function MediaEmbed({
   url,
   title,
   frameClassName = '',
-  className = '',
-  posterClassName = '',
+  className = 'w-full aspect-video overflow-hidden rounded-xl bg-black object-contain',
+  posterClassName = 'w-full aspect-video overflow-hidden rounded-xl',
   loop = false,
 }: MediaEmbedProps) {
   const value = (url ?? '').trim();

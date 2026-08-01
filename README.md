@@ -33,3 +33,21 @@ Direct-message push notifications require VAPID credentials in the Netlify envir
 Generate one VAPID key pair with `npx web-push generate-vapid-keys`, store the keys in Netlify, and keep the private key server-only. Users can then enable notifications from the bell control in the app header. On iPhone, the PWA must first be added to the Home Screen.
 
 The app includes a valid public-key fallback so browser configuration can be parsed safely, but it does not attempt to subscribe users until a matching server-side public/private VAPID pair is configured.
+
+## OneSignal background notifications
+
+Alerts that arrive while the app is closed are delivered through OneSignal, which needs three variables in the Netlify environment:
+
+- `VITE_ONESIGNAL_APP_ID` — the OneSignal app id, read by the browser
+- `ONESIGNAL_APP_ID` — the same id, read by the send function
+- `ONESIGNAL_REST_API_KEY` — server-only; never expose it to the browser
+
+`public/OneSignalSDKWorker.js` is the background worker that raises the notification. It registers under the `/onesignal/` scope so the app's own `/sw.js` keeps scope `/` for offline caching. Members are asked for notification permission when they sign in, and the subscription is linked to their account id so alerts can be addressed to a person rather than a device.
+
+`POST /api/send-push` sends an alert. It is admin-only, because the REST key can notify every subscriber:
+
+```json
+{ "title": "Vespers tonight", "message": "Service begins at 6pm.", "externalIds": ["<user id>"], "url": "https://orthodoxconnect.live/" }
+```
+
+Omit `externalIds` to broadcast to the `Subscribed Users` segment, or pass `segments` to choose others. Server-side flows can import `sendOneSignalNotification` from the same function instead of making an HTTP request. Until the variables above are set the browser skips OneSignal entirely and the endpoint answers `503`, so the existing VAPID notifications continue to work on their own.
