@@ -26,16 +26,17 @@
       (function () {
         try {
           var storedTheme = localStorage.getItem('orthodoxconnect-theme');
-          var theme = storedTheme === 'light' || storedTheme === 'dark'
+          var theme = storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'ancient'
             ? storedTheme
             : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
           var root = document.documentElement;
           root.classList.toggle('dark', theme === 'dark');
+          root.classList.toggle('ancient', theme === 'ancient');
           root.dataset.theme = theme;
-          root.style.colorScheme = theme;
+          root.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
           document.querySelector('meta[name="theme-color"]').setAttribute(
             'content',
-            theme === 'dark' ? '#0a0c12' : '#f7f3eb'
+            theme === 'dark' ? '#0a0c12' : theme === 'ancient' ? '#f0e3c2' : '#f7f3eb'
           );
         } catch (_) {
           document.documentElement.classList.add('dark');

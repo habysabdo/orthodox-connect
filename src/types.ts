@@ -1,5 +1,8 @@
 // Core domain types for OrthodoxConnect
 
+/** UI colour themes. Defined in theme-context so the provider owns the cycle order. */
+export type { Theme } from './theme-context';
+
 export type Role = 'admin' | 'user';
 export type UserStatus = 'active' | 'blocked';
 

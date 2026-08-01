@@ -5,6 +5,7 @@ import {
   Home,
   LogOut,
   Radio,
+  Scroll,
   Shield,
   Sun,
   MessageCircle,
@@ -20,8 +21,16 @@ import { useUI, type ViewKey } from '@/store/ui';
 import { useI18n } from '@/i18n';
 import { hasAdminAccess } from '@/utils/users';
 import { userName } from '@/utils/postSafety';
-import { useTheme } from '@/theme-context';
+import { nextTheme, useTheme } from '@/theme-context';
+import type { Theme } from '@/types';
 import { LanguageSwitcher } from './LanguageSwitcher';
+
+/** Icon + label for the theme the toggle switches *to*, cycling light → dark → ancient → light. */
+const THEME_ACTIONS: Record<Theme, { label: string; icon: typeof Sun }> = {
+  light: { label: 'Light Mode', icon: Sun },
+  dark: { label: 'Dark Mode', icon: Moon },
+  ancient: { label: 'Ancient Mode', icon: Scroll },
+};
 
 export function LeftSidebar({ onClose }: { onClose?: () => void }) {
   const state = useStore();
@@ -29,6 +38,7 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
   const { view, setView, setGoLiveOpen, setShareOpen, setPrayerMeetingOpen } = useUI();
   const { t } = useI18n();
   const { theme, toggleTheme } = useTheme();
+  const themeAction = THEME_ACTIONS[nextTheme(theme)];
   const me = users.find((u) => u?.id === currentUserId);
   if (!me) return null;
 
@@ -168,12 +178,12 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
           type="button"
           onClick={toggleTheme}
           className="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-ink-300 transition-all hover:bg-ink-800 hover:text-ink-100"
-          aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          aria-label={`Switch to ${themeAction.label}`}
         >
           <span className="text-ink-400 group-hover:text-gold-300">
-            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+            <themeAction.icon size={20} />
           </span>
-          <span className="flex-1 text-left">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+          <span className="flex-1 text-left">{themeAction.label}</span>
         </button>
 
       </nav>
