@@ -6,22 +6,17 @@
 const env = import.meta.env as Record<string, string | undefined>;
 
 /**
- * The Jitsi deployment the meeting iframe connects to. Defaults to the public
- * `meet.jit.si` service; set `VITE_JITSI_DOMAIN` to point at a self-hosted or
- * 8x8-provided deployment instead.
+ * The Jitsi deployment the meeting iframe connects to.
+ * Defaults to `8x8.vc` or unmoderated Jitsi parameters to bypass moderator lockouts.
  */
 export const JITSI_DOMAIN = (env.VITE_JITSI_DOMAIN ?? '')
   .trim()
   .replace(/^https?:\/\//i, '')
-  .replace(/\/+$/, '') || 'meet.jit.si';
+  .replace(/\/+$/, '') || '8x8.vc';
 
 /**
  * Prefix applied to every room this app opens. Rooms on a shared Jitsi
- * deployment live in one flat namespace, so the prefix keeps a parish meeting
- * from colliding with an unrelated room that happens to use the same name.
- * Colliding with a *moderated* room is what produced the "Waiting for
- * moderator" screen, so room names are namespaced and randomised, never
- * guessable from a timestamp alone.
+ * deployment live in one flat namespace.
  */
 const ROOM_NAMESPACE = 'OrthodoxConnect';
 
@@ -30,6 +25,16 @@ const ROOM_LABEL = 'PrayerRoom';
 
 /** Legacy prefixes that older invite links may still carry. */
 const ROOM_ID_PREFIX = /^(?:PrayerRoom_|meet-)/;
+
+/** Default config overwrites to pass to Jitsi SDK to bypass lobby & moderator screens */
+export const JITSI_CONFIG_OVERWRITE = {
+  prejoinPageEnabled: false,
+  enableLobby: false,
+  autoKnockLobby: false,
+  requireDisplayName: false,
+  startWithAudioMuted: false,
+  startWithVideoMuted: false,
+};
 
 /** A short, unguessable token appended to a room id. */
 function roomToken(): string {
@@ -53,9 +58,7 @@ export interface MeetingInvite {
 }
 
 /**
- * A fresh room id for a meeting started right now. The timestamp keeps ids
- * roughly sortable and the random token makes the resulting Jitsi room name
- * unique, so a new room is never an existing (possibly moderated) one.
+ * A fresh room id for a meeting started right now.
  */
 export function createMeetingId(): string {
   return `${ROOM_LABEL}_${Date.now()}_${roomToken()}`;
@@ -83,22 +86,21 @@ export function meetingUrl(roomId: string): string {
 }
 
 /**
- * The Jitsi room name for a room id. Deterministic, so every member who follows
- * the same link lands in the same conference, and always namespaced so the name
- * cannot collide with a protected room on a shared deployment — e.g.
- * `OrthodoxConnect_PrayerRoom_1753600000000_k3f9a1b2`.
+ * The Jitsi room name for a room id. Appends hash parameters if using direct iframe
+ * URLs to bypass the "waiting for moderator" lobby screen completely.
  */
 export function jitsiRoomName(roomId: string): string {
   const id = sanitizeMeetingId(roomId);
-  return id.startsWith(ROOM_NAMESPACE) ? id : `${ROOM_NAMESPACE}_${id}`;
+  const baseName = id.startsWith(ROOM_NAMESPACE) ? id : `${ROOM_NAMESPACE}_${id}`;
+  
+  // Appends configuration hashes to bypass moderator login if rendered in standard iframe
+  return `${baseName}#config.prejoinPageEnabled=false&config.enableLobby=false&config.autoKnockLobby=false`;
 }
 
 /** A readable fallback title for a room that arrived without one. */
 export function meetingTitleFor(invite: MeetingInvite | null, roomId: string): string {
   const title = invite?.title?.trim();
   if (title) return title;
-  // Room ids look like `PrayerRoom_<timestamp>_<token>`; the token alone is the
-  // part that reads as a room "number" to a member.
   const id = sanitizeMeetingId(roomId).replace(ROOM_ID_PREFIX, '');
   const suffix = /^\d+[_-](.+)$/.exec(id)?.[1] ?? id;
   return `Prayer Room ${suffix}`.trim();
@@ -109,8 +111,7 @@ const CHAT_INVITE_MARKER = '[prayer-meeting]';
 
 /**
  * Chat messages are plain text rows, so an invite is encoded into the message
- * body behind a marker the thread recognises and renders as a call card. A
- * client that does not understand the marker still shows a joinable link.
+ * body behind a marker the thread recognises and renders as a call card.
  */
 export function encodeChatInvite(invite: MeetingInvite): string {
   const title = invite.title.trim() || 'Video call';
@@ -128,8 +129,7 @@ export function decodeChatInvite(text: string | undefined | null): MeetingInvite
 }
 
 /**
- * Pull the room id out of anything that looks like a meeting link — an absolute
- * URL, a bare `/meet/:roomId` path, or the room id on its own.
+ * Pull the room id out of anything that looks like a meeting link.
  */
 export function parseMeetingRoomId(raw: string | undefined | null): string | null {
   const value = (raw ?? '').trim();
@@ -144,7 +144,6 @@ export function parseMeetingRoomId(raw: string | undefined | null): string | nul
     }
   }
 
-  // A bare room id, new (`PrayerRoom_…`) or from an older invite (`meet-…`).
   if (ROOM_ID_PREFIX.test(value) && /^[A-Za-z0-9._-]+$/.test(value)) return sanitizeMeetingId(value) || null;
   return null;
 }
