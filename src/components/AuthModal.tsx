@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Mail, Lock, User, UserPlus, LogIn, AlertCircle } from 'lucide-react';
 import netlifyIdentity from 'netlify-identity-widget';
+import { closeIdentityModal, signInWithIdentity, signUpWithIdentity } from '../lib/auth';
 
 export const AuthModal: React.FC = () => {
   const [isRegister, setIsRegister] = useState(false);
@@ -11,13 +12,34 @@ export const AuthModal: React.FC = () => {
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // The Identity widget's own modal must never cover this form. Closing it on
+  // every login and logout event guarantees the default white overlay is gone
+  // even if something else in the app opens it.
+  useEffect(() => {
+    netlifyIdentity.on('login', closeIdentityModal);
+    netlifyIdentity.on('logout', closeIdentityModal);
+    closeIdentityModal();
+    return () => {
+      netlifyIdentity.off('login', closeIdentityModal);
+      netlifyIdentity.off('logout', closeIdentityModal);
+    };
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setNotice('');
 
-    if (!email || !password) {
+    const trimmedEmail = email.trim();
+    const trimmedName = fullName.trim();
+
+    if (!trimmedEmail || !password) {
       setError('Please fill in all required fields.');
+      return;
+    }
+
+    if (isRegister && !trimmedName) {
+      setError('Please enter your full name.');
       return;
     }
 
@@ -28,9 +50,19 @@ export const AuthModal: React.FC = () => {
 
     setBusy(true);
     try {
-      netlifyIdentity.init();
-      // Open Netlify Identity modal directly to perform authentication
-      netlifyIdentity.open(isRegister ? 'signup' : 'login');
+      // Authenticate directly against Identity — the widget modal is never opened.
+      // On success the widget emits its `login` event and StoreProvider takes over
+      // from there, loading the session and routing into the app.
+      const result = isRegister
+        ? await signUpWithIdentity(trimmedName, trimmedEmail, password)
+        : await signInWithIdentity(trimmedEmail, password);
+
+      if (result.status === 'error') {
+        setError(result.message);
+      } else if (result.status === 'confirmation-required') {
+        setNotice('Account created. Check your email for a confirmation link to finish signing up.');
+        setPassword('');
+      }
     } catch (err) {
       console.error('Authentication failed', err);
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');

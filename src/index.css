@@ -205,3 +205,54 @@ html.theme-transition * {
     animation-duration: 180ms;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Netlify Identity widget suppression
+
+   AuthModal owns the whole login/signup experience. Netlify Identity still
+   powers authentication underneath, but its bundled UI — a full-screen iframe
+   holding the white `#netlify-modal-assembly` overlay — must never render.
+
+   The widget writes `display: block !important` inline on the iframe when its
+   modal opens, and an inline !important declaration outranks any stylesheet
+   rule, so `display: none !important` here would lose. Instead neutralise it
+   with the properties the widget only sets inline *without* !important (size,
+   position, border, z-index) plus visibility and pointer-events, which it never
+   sets at all. The result is an iframe that stays in the DOM — so `init()` and
+   `close()` keep working — while being invisible and non-interactive.
+   --------------------------------------------------------------------------- */
+iframe#netlify-identity-widget,
+iframe.netlify-identity-widget,
+#netlify-identity-widget,
+.netlify-identity-widget {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  position: fixed !important;
+  top: -9999px !important;
+  left: -9999px !important;
+  width: 0 !important;
+  height: 0 !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: 0 !important;
+  max-height: 0 !important;
+  border: 0 !important;
+  overflow: hidden !important;
+  clip-path: inset(50%) !important;
+  z-index: -1 !important;
+}
+
+/* The modal overlay itself. The widget normally renders this inside its own
+   iframe document, where host styles cannot reach it, so hiding the iframe
+   above is what actually suppresses it — this rule is the belt-and-braces for
+   any version that mounts the overlay into the host page instead. */
+#netlify-modal-assembly,
+.netlify-modal-assembly,
+#netlify-identity-widget-modal,
+.netlify-identity-modal {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
