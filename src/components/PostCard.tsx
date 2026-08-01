@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Clapperboard,
   AlertCircle,
-  ExternalLink,
   Flag,
   Heart,
   Loader2,
@@ -37,12 +36,6 @@ import {
 import { PostShareModal } from './PostShareModal';
 import { LikesModal } from './LikesModal';
 import { ProfileLink } from './ProfileLink';
-
-// Helper function to detect Facebook video links
-function isFacebookUrl(url: string | null | undefined): boolean {
-  if (!url) return false;
-  return url.includes('facebook.com') || url.includes('fb.watch') || url.includes('fb.com');
-}
 
 export function PostCard({ post }: { post: Post }) {
   const store = useStore();
@@ -124,25 +117,6 @@ export function PostCard({ post }: { post: Post }) {
   };
 
   const renderVideoPlayer = (url: string) => {
-    if (isFacebookUrl(url)) {
-      return (
-        <div className="flex flex-col items-center justify-center p-6 text-center bg-ink-900 text-ink-200">
-          <p className="text-sm font-semibold mb-1 text-ink-100">Facebook Video Shared</p>
-          <p className="text-xs text-ink-400 mb-3 max-w-sm">
-            Facebook restricts playback inside third-party apps. Tap below to watch directly on Facebook.
-          </p>
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="gold-btn text-xs inline-flex items-center gap-1.5 px-4 py-2"
-          >
-            Watch on Facebook <ExternalLink size={14} />
-          </a>
-        </div>
-      );
-    }
-
     return (
       <LazyFeedVideo
         url={url}

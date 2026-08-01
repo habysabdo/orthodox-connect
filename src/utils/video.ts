@@ -125,22 +125,6 @@ function isFacebook(url: URL): boolean {
   return host === 'facebook.com' || host === 'm.facebook.com' || host === 'fb.watch' || host === 'fb.com';
 }
 
-function cleanFacebookVideoUrl(url: URL): URL {
-  const cleaned = new URL(url.toString());
-  const host = cleaned.hostname.replace(/^www\./, '');
-
-  if (host === 'facebook.com' || host === 'm.facebook.com' || host === 'fb.com') {
-    cleaned.protocol = 'https:';
-    cleaned.hostname = 'www.facebook.com';
-  }
-
-  for (const parameter of [...cleaned.searchParams.keys()]) {
-    if (!['v', 'story_fbid', 'id'].includes(parameter)) cleaned.searchParams.delete(parameter);
-  }
-  cleaned.hash = '';
-  return cleaned;
-}
-
 function isFacebookVideoUrl(url: URL): boolean {
   if (!isFacebook(url)) return false;
 
@@ -282,13 +266,11 @@ export function parseVideoSource(raw: string | undefined | null): VideoSource {
   const yt = extractYouTubeVideoId(original);
   if (yt) {
     const origin = typeof window !== 'undefined' ? window.location?.origin : '';
-    const query = new URLSearchParams({ enablejsapi: '1' });
-    if (origin) query.set('origin', origin);
     return {
       kind: 'embed',
       provider: 'youtube',
       videoId: yt,
-      embedUrl: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(yt)}?${query.toString()}`,
+      embedUrl: `https://www.youtube-nocookie.com/embed/${yt}?enablejsapi=1&origin=${encodeURIComponent(origin)}`,
       originalUrl: url.toString(),
     };
   }
@@ -304,19 +286,12 @@ export function parseVideoSource(raw: string | undefined | null): VideoSource {
   }
 
   if (isFacebookVideoUrl(url)) {
-    const facebookUrl = cleanFacebookVideoUrl(url);
-    const query = new URLSearchParams({
-      href: facebookUrl.toString(),
-      show_text: 'false',
-      width: '1280',
-      allowfullscreen: 'true',
-      autoplay: 'false',
-    });
+    const facebookUrl = url.toString();
     return {
       kind: 'embed',
       provider: 'facebook',
-      embedUrl: `https://www.facebook.com/plugins/video.php?${query.toString()}`,
-      originalUrl: facebookUrl.toString(),
+      embedUrl: `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(facebookUrl)}`,
+      originalUrl: facebookUrl,
     };
   }
 
