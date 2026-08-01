@@ -81,18 +81,40 @@ function directVideoExtension(url: URL): string | null {
   return DIRECT_VIDEO_EXTENSIONS.includes(extension) ? extension : null;
 }
 
+/**
+ * Every host YouTube hands out share links on — `youtube.com` and its
+ * subdomains (`www`, `m`, `music`), the privacy-preserving `youtube-nocookie`
+ * domain, and the `youtu.be` shortener. Matching the family rather than a fixed
+ * list keeps a link copied from a phone or from YouTube Music out of the HTML5
+ * player, which cannot play any of them.
+ */
+function isYouTubeHost(url: URL): boolean {
+  const host = url.hostname.toLowerCase();
+  return /(?:^|\.)youtube\.com$/.test(host) || /(?:^|\.)youtube-nocookie\.com$/.test(host) || /(?:^|\.)youtu\.be$/.test(host);
+}
+
+/** YouTube video ids are 11 URL-safe characters; anything else is a channel, playlist or search. */
+function asYouTubeId(value: string | null | undefined): string | null {
+  const id = (value ?? '').trim();
+  return /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+}
+
 function youTubeId(url: URL): string | null {
-  const host = url.hostname.replace(/^www\./, '');
-  if (host === 'youtu.be') {
-    const id = url.pathname.split('/').filter(Boolean)[0];
-    return id || null;
-  }
-  if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'youtube-nocookie.com') {
-    if (url.pathname === '/watch') return url.searchParams.get('v');
-    const segments = url.pathname.split('/').filter(Boolean);
-    // /embed/ID, /shorts/ID, /v/ID, /live/ID
-    if (['embed', 'shorts', 'v', 'live'].includes(segments[0])) return segments[1] || null;
-  }
+  if (!isYouTubeHost(url)) return null;
+
+  const host = url.hostname.toLowerCase().replace(/^www\./, '');
+  const segments = url.pathname.split('/').filter(Boolean);
+
+  if (host === 'youtu.be') return asYouTubeId(segments[0]);
+
+  // `watch?v=ID` — also the shape behind `/watch/?v=ID` and mobile share links
+  // that carry extra tracking parameters.
+  const queryId = asYouTubeId(url.searchParams.get('v') ?? url.searchParams.get('vi'));
+  if (queryId) return queryId;
+
+  // /embed/ID, /e/ID, /shorts/ID, /v/ID, /live/ID
+  if (['embed', 'e', 'shorts', 'v', 'live'].includes(segments[0])) return asYouTubeId(segments[1]);
+
   return null;
 }
 
@@ -174,8 +196,45 @@ function isFacebookVideoUrl(url: URL): boolean {
     (/^\/watch\/?$/.test(pathname) && url.searchParams.has('v')) ||
     pathname === '/video.php' ||
     /\/(?:videos?|reels?)(?:\/|$)/.test(pathname) ||
-    /\/share\/v(?:\/|$)/.test(pathname)
+    // `/share/v/<id>` for videos and `/share/r/<id>` for reels — the shapes the
+    // current Facebook apps put on the clipboard.
+    /\/share\/[vr](?:\/|$)/.test(pathname)
   );
+}
+
+/**
+ * The official Facebook video plugin URL for a Facebook video link.
+ *
+ * Facebook refuses to be framed directly, so pointing an iframe (or worse, an
+ * HTML5 `<video>` element) at a `facebook.com/watch?v=…` link renders an empty
+ * black box. Every Facebook video therefore has to go through
+ * `plugins/video.php`, which is the only embed Facebook serves to other sites.
+ * Returns null when the link is not a Facebook video, so callers can fall back
+ * to their own rendering.
+ */
+export function facebookVideoEmbedUrl(
+  raw: string | undefined | null,
+  options: { autoplay?: boolean; muted?: boolean } = {},
+): string | null {
+  const url = normalizeUrl((raw ?? '').trim());
+  if (!url || !isFacebookVideoUrl(url)) return null;
+
+  const query = new URLSearchParams({
+    href: cleanFacebookVideoUrl(url).toString(),
+    show_text: 'false',
+    width: '1280',
+    allowfullscreen: 'true',
+    autoplay: options.autoplay ? 'true' : 'false',
+  });
+  if (options.muted) query.set('muted', '1');
+  return `https://www.facebook.com/plugins/video.php?${query.toString()}`;
+}
+
+/** The canonical Facebook URL an embed or out-link should point at. */
+export function facebookVideoUrl(raw: string | undefined | null): string | null {
+  const url = normalizeUrl((raw ?? '').trim());
+  if (!url || !isFacebookVideoUrl(url)) return null;
+  return cleanFacebookVideoUrl(url).toString();
 }
 
 const TEXT_URL_PATTERN = /(?:https?:\/\/|www\.|(?:youtube\.com|youtu\.be|facebook\.com|fb\.watch|fb\.com)\/)[^\s<>]+/gi;
@@ -363,19 +422,25 @@ export function parseVideoSource(raw: string | undefined | null): VideoSource {
 
   if (isFacebookVideoUrl(url)) {
     const facebookUrl = cleanFacebookVideoUrl(url);
-    const query = new URLSearchParams({
-      href: facebookUrl.toString(),
-      show_text: 'false',
-      width: '1280',
-      allowfullscreen: 'true',
-      autoplay: 'false',
-    });
     return {
       kind: 'embed',
       provider: 'facebook',
-      embedUrl: `https://www.facebook.com/plugins/video.php?${query.toString()}`,
+      embedUrl: facebookVideoEmbedUrl(url.toString()) ?? '',
       originalUrl: facebookUrl.toString(),
     };
+  }
+
+  // A self-hosted upload — `/api/media/<key>` — describes itself with a `type`
+  // query parameter rather than a file extension, and a signed storage URL
+  // (Supabase, S3) often has no extension in its path either. Both are files the
+  // HTML5 player can play, so they must not fall through to the iframe branch
+  // below. Checked after the platform branches so a platform link always wins.
+  const declaredType = url.searchParams.get('type') ?? '';
+  if (/^video\//i.test(declaredType)) {
+    return { kind: 'direct', url: url.toString(), mimeType: declaredType };
+  }
+  if (/^\/api\/media\//i.test(url.pathname) || /\/storage\/v\d+\/object\//i.test(url.pathname)) {
+    return { kind: 'direct', url: url.toString(), mimeType: 'video/mp4' };
   }
 
   // Any other external link renders inside a generic iframe.

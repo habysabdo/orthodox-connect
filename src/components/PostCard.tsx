@@ -13,15 +13,14 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Avatar } from './ui';
-import { LazyFeedVideo } from './LazyFeedVideo';
-import { YouTubeEmbed } from './YouTubeEmbed';
+import { MediaEmbed } from './MediaEmbed';
 import { MeetingInviteCard } from './MeetingInviteCard';
 import { useStore, getUser } from '@/store/context';
 import { timeAgo } from '@/utils/format';
 import type { Post } from '@/types';
 import { useUI } from '@/store/ui';
 import { hasAdminAccess } from '@/utils/users';
-import { extractEmbeddedVideoUrl, extractExternalUrl, linkifyText, youTubeEmbedUrl } from '@/utils/video';
+import { extractEmbeddedVideoUrl, extractExternalUrl, linkifyText } from '@/utils/video';
 import {
   firstName,
   isLikedBy,
@@ -37,11 +36,6 @@ import {
 import { PostShareModal } from './PostShareModal';
 import { LikesModal } from './LikesModal';
 import { ProfileLink } from './ProfileLink';
-
-/** True when a URL is a YouTube link, so the post renders the iframe embed. */
-function isYouTube(url: string | null | undefined): boolean {
-  return youTubeEmbedUrl(url) !== null;
-}
 
 export function PostCard({ post }: { post: Post }) {
   const store = useStore();
@@ -259,15 +253,13 @@ export function PostCard({ post }: { post: Post }) {
           {postText(post.originalPost) && <p className="whitespace-pre-wrap px-3 pb-3 text-sm leading-relaxed text-ink-200">{postText(post.originalPost)}</p>}
           {postImageUrl(post.originalPost) && <img src={postImageUrl(post.originalPost)} alt="" className="max-h-96 w-full object-cover" referrerPolicy="no-referrer" />}
           {postVideoUrl(post.originalPost) && (
-            isYouTube(postVideoUrl(post.originalPost)) ? (
-              <YouTubeEmbed url={postVideoUrl(post.originalPost)} title="Original shared video" className="!rounded-none" />
-            ) : (
-              <LazyFeedVideo
-                url={postVideoUrl(post.originalPost)}
-                className="aspect-video w-full bg-black object-contain"
-                posterClassName="aspect-video w-full"
-              />
-            )
+            <MediaEmbed
+              url={postVideoUrl(post.originalPost)}
+              title="Original shared video"
+              frameClassName="!rounded-none"
+              className="aspect-video w-full bg-black object-contain"
+              posterClassName="aspect-video w-full"
+            />
           )}
         </div>
       )}
@@ -276,18 +268,13 @@ export function PostCard({ post }: { post: Post }) {
           video of its own, so exactly one player renders per post. */}
       {embeddedVideoUrl && (
         <div className="mx-4 mb-4 overflow-hidden rounded-xl border border-ink-600 bg-black shadow-lg shadow-black/20">
-          {isYouTube(embeddedVideoUrl) ? (
-            <YouTubeEmbed url={embeddedVideoUrl} title="External media shared in this post" className="!rounded-none" />
-          ) : (
-            <div className="aspect-video w-full">
-              <LazyFeedVideo
-                url={embeddedVideoUrl}
-                title="External media shared in this post"
-                className="h-full w-full bg-black"
-                posterClassName="h-full w-full"
-              />
-            </div>
-          )}
+          <MediaEmbed
+            url={embeddedVideoUrl}
+            title="External media shared in this post"
+            frameClassName="!rounded-none"
+            className="aspect-video w-full bg-black object-contain"
+            posterClassName="aspect-video w-full"
+          />
         </div>
       )}
 
@@ -301,16 +288,14 @@ export function PostCard({ post }: { post: Post }) {
       {/* Video */}
       {videoUrl && (
         <div className="border-y border-ink-700 bg-black">
-          {isYouTube(videoUrl) ? (
-            <YouTubeEmbed url={videoUrl} title="Video content" className="!rounded-none" />
-          ) : (
-            <LazyFeedVideo
-              url={videoUrl}
-              loop
-              className="aspect-video max-h-[620px] w-full bg-black object-contain"
-              posterClassName="aspect-video max-h-[620px] w-full"
-            />
-          )}
+          <MediaEmbed
+            url={videoUrl}
+            title="Video content"
+            loop
+            frameClassName="!rounded-none"
+            className="aspect-video max-h-[620px] w-full bg-black object-contain"
+            posterClassName="aspect-video max-h-[620px] w-full"
+          />
           <div className="flex items-center justify-between gap-3 border-t border-white/10 bg-ink-950/90 px-4 py-3">
             <div className="min-w-0">
               <div className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-300">Video post</div>

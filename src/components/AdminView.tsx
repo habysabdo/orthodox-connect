@@ -7,7 +7,7 @@ import { apiFetch } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/store/context';
 import { useUI } from '@/store/ui';
-import { LazyFeedVideo } from './LazyFeedVideo';
+import { MediaEmbed } from './MediaEmbed';
 
 interface ManagedUser extends User {
   status: UserStatus;
@@ -552,7 +552,7 @@ export function AdminView() {
                         <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-ink-200">{post.text || 'No description provided.'}</p>
                       </div>
                       {post.image && <img src={post.image} alt={`Preview for ${post.promoTitle || 'promo post'}`} className="max-h-72 w-full rounded-xl border border-ink-700 bg-ink-950 object-contain" referrerPolicy="no-referrer" />}
-                      {post.video && <LazyFeedVideo url={post.video} title={post.promoTitle || 'Promo video'} className="aspect-video w-full rounded-xl bg-black object-contain" posterClassName="aspect-video w-full rounded-xl" />}
+                      {post.video && <MediaEmbed url={post.video} title={post.promoTitle || 'Promo video'} className="aspect-video w-full rounded-xl bg-black object-contain" posterClassName="aspect-video w-full rounded-xl" />}
                     </div>
 
                     <div className="flex gap-2 border-t border-ink-700 bg-ink-900/40 p-4">
