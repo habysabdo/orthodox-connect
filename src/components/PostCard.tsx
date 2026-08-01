@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Clapperboard,
   AlertCircle,
+  ExternalLink,
   Flag,
   Heart,
   Loader2,
@@ -45,6 +46,12 @@ function getYouTubeEmbedUrl(url: string | null | undefined): string | null {
   return match && match[2].length === 11
     ? `https://www.youtube-nocookie.com/embed/${match[2]}`
     : null;
+}
+
+// Helper function to detect Facebook video links
+function isFacebookUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  return url.includes('facebook.com') || url.includes('fb.watch') || url.includes('fb.com');
 }
 
 export function PostCard({ post }: { post: Post }) {
@@ -124,6 +131,50 @@ export function PostCard({ post }: { post: Post }) {
     const tid = openThreadWith(author.id);
     setOpenThreadId(tid);
     setView('messenger');
+  };
+
+  const renderVideoPlayer = (url: string) => {
+    if (getYouTubeEmbedUrl(url)) {
+      return (
+        <div className="aspect-video w-full overflow-hidden bg-black">
+          <iframe
+            src={getYouTubeEmbedUrl(url)!}
+            title="Shared YouTube Video"
+            className="h-full w-full border-0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      );
+    }
+
+    if (isFacebookUrl(url)) {
+      return (
+        <div className="flex flex-col items-center justify-center p-6 text-center bg-ink-900 text-ink-200">
+          <p className="text-sm font-semibold mb-1 text-ink-100">Facebook Video Shared</p>
+          <p className="text-xs text-ink-400 mb-3 max-w-sm">
+            Facebook restricts playback inside third-party apps. Tap below to watch directly on Facebook.
+          </p>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="gold-btn text-xs inline-flex items-center gap-1.5 px-4 py-2"
+          >
+            Watch on Facebook <ExternalLink size={14} />
+          </a>
+        </div>
+      );
+    }
+
+    return (
+      <LazyFeedVideo
+        url={url}
+        loop
+        className="aspect-video max-h-[620px] w-full bg-black object-contain"
+        posterClassName="aspect-video max-h-[620px] w-full"
+      />
+    );
   };
 
   return (
@@ -256,51 +307,14 @@ export function PostCard({ post }: { post: Post }) {
           </div>
           {postText(post.originalPost) && <p className="whitespace-pre-wrap px-3 pb-3 text-sm leading-relaxed text-ink-200">{postText(post.originalPost)}</p>}
           {postImageUrl(post.originalPost) && <img src={postImageUrl(post.originalPost)} alt="" className="max-h-96 w-full object-cover" referrerPolicy="no-referrer" />}
-          {postVideoUrl(post.originalPost) && (
-            getYouTubeEmbedUrl(postVideoUrl(post.originalPost)) ? (
-              <div className="aspect-video w-full overflow-hidden bg-black">
-                <iframe
-                  src={getYouTubeEmbedUrl(postVideoUrl(post.originalPost))!}
-                  title="Original shared video"
-                  className="h-full w-full border-0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              </div>
-            ) : (
-              <LazyFeedVideo
-                url={postVideoUrl(post.originalPost)}
-                className="aspect-video w-full bg-black object-contain"
-                posterClassName="aspect-video w-full"
-              />
-            )
-          )}
+          {postVideoUrl(post.originalPost) && renderVideoPlayer(postVideoUrl(post.originalPost)!)}
         </div>
       )}
 
       {/* External video or rich link preview */}
       {embeddedVideoUrl && (
         <div className="mx-4 mb-4 overflow-hidden rounded-xl border border-ink-600 bg-black shadow-lg shadow-black/20">
-          {getYouTubeEmbedUrl(embeddedVideoUrl) ? (
-            <div className="aspect-video w-full">
-              <iframe
-                src={getYouTubeEmbedUrl(embeddedVideoUrl)!}
-                title="External media shared in this post"
-                className="h-full w-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
-          ) : (
-            <div className="aspect-video w-full">
-              <LazyFeedVideo
-                url={embeddedVideoUrl}
-                title="External media shared in this post"
-                className="h-full w-full bg-black"
-                posterClassName="h-full w-full"
-              />
-            </div>
-          )}
+          {renderVideoPlayer(embeddedVideoUrl)}
         </div>
       )}
 
@@ -314,24 +328,7 @@ export function PostCard({ post }: { post: Post }) {
       {/* Video */}
       {videoUrl && (
         <div className="border-y border-ink-700 bg-black">
-          {getYouTubeEmbedUrl(videoUrl) ? (
-            <div className="aspect-video w-full">
-              <iframe
-                src={getYouTubeEmbedUrl(videoUrl)!}
-                title="Video content"
-                className="h-full w-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
-          ) : (
-            <LazyFeedVideo
-              url={videoUrl}
-              loop
-              className="aspect-video max-h-[620px] w-full bg-black object-contain"
-              posterClassName="aspect-video max-h-[620px] w-full"
-            />
-          )}
+          {renderVideoPlayer(videoUrl)}
           <div className="flex items-center justify-between gap-3 border-t border-white/10 bg-ink-950/90 px-4 py-3">
             <div className="min-w-0">
               <div className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-300">Video post</div>
