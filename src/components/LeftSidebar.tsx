@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   CalendarDays,
   Clapperboard,
@@ -14,6 +15,7 @@ import {
   X,
   Scroll,
   Languages,
+  UserPlus,
 } from 'lucide-react';
 import { Avatar, Logo } from './ui';
 import { useStore, unreadCountFor } from '@/store/context';
@@ -21,6 +23,7 @@ import { useUI, type ViewKey } from '@/store/ui';
 import { useTheme, type ThemeMode } from '@/store/theme';
 import { useI18n, type Lang } from '@/store/i18n';
 import { useAuth } from '@/store/auth';
+import { InviteModal } from './InviteModal';
 
 export function LeftSidebar({ onClose }: { onClose?: () => void }) {
   const state = useStore();
@@ -30,6 +33,7 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
   const { lang, setLang, t } = useI18n();
   const { profile, signOut } = useAuth();
   const me = users.find((u) => u.id === currentUserId);
+  const [inviteOpen, setInviteOpen] = useState(false);
   if (!me) return null;
   const isAdmin = profile?.role === 'admin';
 
@@ -130,6 +134,20 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
         })}
       </nav>
 
+      {/* Invite Friends CTA */}
+      <button
+        onClick={() => setInviteOpen(true)}
+        className="flex items-center gap-3 rounded-2xl border border-gold-400/30 bg-gradient-to-br from-gold-500/10 to-transparent px-4 py-3 text-left transition-all hover:border-gold-400/60 hover:from-gold-500/20"
+      >
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-400/15 text-gold-200">
+          <UserPlus size={20} />
+        </span>
+        <div className="flex-1">
+          <div className="text-sm font-bold text-gold-100">Invite Friends</div>
+          <div className="text-xs text-ink-400">Share your invite link & QR code</div>
+        </div>
+      </button>
+
       <div className="flex-1" />
 
       {/* Language switcher */}
@@ -202,6 +220,7 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
         <LogOut size={16} className="rtl-flip" />
         {t('nav.signOut')}
       </button>
+      <InviteModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
     </aside>
   );
 }

@@ -1,8 +1,10 @@
-import { useState } from 'react';
-import { Eye, ShieldCheck, Sparkles, Users, Video, Mail, Lock, User as UserIcon, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Eye, ShieldCheck, Sparkles, Users, Video, Mail, Lock, User as UserIcon, Loader2, Gift } from 'lucide-react';
 import { Logo } from './ui';
 import { useI18n } from '@/store/i18n';
 import { useAuth } from '@/store/auth';
+
+const APP_DOMAIN = import.meta.env.VITE_APP_DOMAIN || 'https://orthodoxconnect.live';
 
 export function Landing() {
   const { signIn, signUp } = useAuth();
@@ -13,6 +15,17 @@ export function Landing() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
+  const [refCode, setRefCode] = useState<string | null>(null);
+
+  // Detect /invite?ref=... and pre-fill sign-up mode
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (ref) {
+      setRefCode(ref);
+      setMode('signup');
+    }
+  }, []);
 
   const validateEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
@@ -43,7 +56,7 @@ export function Landing() {
         setBusy(false);
       }
     } else {
-      const { error: err } = await signUp(email.trim(), password, name.trim());
+      const { error: err } = await signUp(email.trim(), password, name.trim(), refCode ?? undefined);
       if (err) {
         setError(err);
         setBusy(false);
@@ -110,6 +123,14 @@ export function Landing() {
               <p className="mt-2 text-center text-sm text-ink-400">
                 {t('landing.signIn')}
               </p>
+
+              {/* Referral banner */}
+              {refCode && (
+                <div className="mt-4 flex items-center gap-2 rounded-xl border border-gold-400/40 bg-gold-400/10 px-3 py-2 text-xs text-gold-200">
+                  <Gift size={14} />
+                  <span>You were invited! Sign up to join your friend's parish community.</span>
+                </div>
+              )}
 
               {/* Tab switcher */}
               <div className="mt-6 flex gap-1 rounded-xl border border-ink-700 bg-ink-900/50 p-1">
