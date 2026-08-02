@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { StoreProvider } from "./store/StoreProvider";
 import { UIProvider } from "./store/ui";
+import { NotificationsProvider } from "./context/NotificationsContext"; // Added import
 import { I18nProvider } from "./i18n";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./components/Login";
@@ -58,28 +59,30 @@ export default function App() {
     <I18nProvider>
       <AuthProvider>
         <StoreProvider>
-          <UIProvider>
-            <BrowserRouter>
-              <Routes>
-                {/* Public */}
-                <Route path="/" element={<LandingRoute />} />
-                <Route path="/login" element={<LoginRoute />} />
+          <NotificationsProvider>
+            <UIProvider>
+              <BrowserRouter>
+                <Routes>
+                  {/* Public */}
+                  <Route path="/" element={<LandingRoute />} />
+                  <Route path="/login" element={<LoginRoute />} />
 
-                {/* Protected App Shell */}
-                <Route
-                  path="/feed"
-                  element={
-                    <ProtectedRoute>
-                      <AppShell />
-                    </ProtectedRoute>
-                  }
-                />
+                  {/* Protected App Shell */}
+                  <Route
+                    path="/feed"
+                    element={
+                      <ProtectedRoute>
+                        <AppShell />
+                      </ProtectedRoute>
+                    }
+                  />
 
-                {/* Fallback */}
-                <Route path="*" element={<Navigate to="/feed" replace />} />
-              </Routes>
-            </BrowserRouter>
-          </UIProvider>
+                  {/* Fallback */}
+                  <Route path="*" element={<Navigate to="/feed" replace />} />
+                </Routes>
+              </BrowserRouter>
+            </UIProvider>
+          </NotificationsProvider>
         </StoreProvider>
       </AuthProvider>
     </I18nProvider>
