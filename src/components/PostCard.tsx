@@ -1,198 +1,252 @@
-import { useState } from "react";
-import { VideoPlayer } from "./VideoPlayer";
+import { useState } from 'react';
+import {
+  Flag,
+  Heart,
+  MessageSquare,
+  MoreHorizontal,
+  Send,
+  ShieldAlert,
+  Trash2,
+} from 'lucide-react';
+import { Avatar } from './ui';
+import { useStore, getUser } from '@/store/context';
+import { timeAgo } from '@/utils/format';
+import type { Post } from '@/types';
+import { useUI } from '@/store/ui';
 
-/**
- * PostCard
- *
- * Renders a single post in the Orthodox Connect feed.
- *
- * Media handling:
- *  - Bunny Stream videos → rendered via the <VideoPlayer> component using the
- *    official Bunny embed iframe.
- *  - YouTube videos       → rendered via YouTube's lightweight embed iframe.
- *  - Facebook videos      → rendered via Facebook's plugin embed iframe.
- *  - Image posts          → rendered as a standard <img>.
- *
- * The post object is expected to follow a shape similar to:
- *   {
- *     id: string,
- *     author: { name: string, avatar_url?: string },
- *     content: string,
- *     created_at: string,
- *     media_type?: "bunny" | "youtube" | "facebook" | "image" | null,
- *     video_id?: string,        // used for Bunny & YouTube
- *     video_url?: string,       // used for Facebook embed
- *     image_url?: string,       // used for image posts
- *     thumbnail_url?: string,   // optional poster for Bunny videos
- *   }
- */
+export function PostCard({ post }: { post: Post }) {
+  const store = useStore();
+  const { users, currentUserId, toggleLike, addComment, openThreadWith, flagPost, unflagPost, deletePost } = store;
+  const { setView, setOpenThreadId } = useUI();
+  const me = users.find((u) => u.id === currentUserId);
+  const author = getUser(store, post.authorId);
+  const [showComments, setShowComments] = useState(false);
+  const [comment, setComment] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [flagOpen, setFlagOpen] = useState(false);
+  const [flagReason, setFlagReason] = useState('');
 
-export interface PostAuthor {
-  name: string;
-  avatar_url?: string;
-}
+  if (!me || !author) return null;
 
-export interface Post {
-  id: string;
-  author: PostAuthor;
-  content: string;
-  created_at: string;
-  media_type?: "bunny" | "youtube" | "facebook" | "image" | null;
-  video_id?: string;
-  video_url?: string;
-  image_url?: string;
-  thumbnail_url?: string;
-}
+  const liked = post.likes.includes(me.id);
+  const isAdmin = me.role === 'admin';
+  const isAuthor = post.authorId === me.id;
 
-export interface PostCardProps {
-  post: Post;
-  onLike?: (postId: string) => void;
-  onComment?: (postId: string) => void;
-}
+  const submitComment = () => {
+    if (!comment.trim()) return;
+    addComment(post.id, comment.trim());
+    setComment('');
+    setShowComments(true);
+  };
 
-function timeAgo(isoDate: string): string {
-  const diff = Date.now() - new Date(isoDate).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d`;
-}
-
-/** YouTube lightweight embed — no extra JS, respects privacy-enhanced mode. */
-function YouTubeEmbed({ videoId }: { videoId: string }) {
-  return (
-    <div className="aspect-video w-full overflow-hidden rounded-lg">
-      <iframe
-        src={`https://www.youtube-nocookie.com/embed/${videoId}`}
-        title="YouTube video"
-        loading="lazy"
-        className="h-full w-full border-0"
-        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
-        allowFullScreen
-      />
-    </div>
-  );
-}
-
-/** Facebook video embed via the official plugin iframe. */
-function FacebookEmbed({ videoUrl }: { videoUrl: string }) {
-  const src = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(
-    videoUrl,
-  )}&show_text=false`;
-  return (
-    <div className="aspect-video w-full overflow-hidden rounded-lg">
-      <iframe
-        src={src}
-        title="Facebook video"
-        loading="lazy"
-        className="h-full w-full border-0"
-        allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
-        allowFullScreen
-      />
-    </div>
-  );
-}
-
-export function PostCard({ post, onLike, onComment }: PostCardProps) {
-  const [liked, setLiked] = useState(false);
-
-  const handleLike = () => {
-    setLiked((v) => !v);
-    onLike?.(post.id);
+  const messageAuthor = () => {
+    const tid = openThreadWith(author.id);
+    setOpenThreadId(tid);
+    setView('messenger');
   };
 
   return (
-    <article className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-neutral-800">
+    <article className="card animate-slide-up overflow-hidden">
       {/* Header */}
-      <div className="mb-3 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-600">
-          {post.author.avatar_url ? (
-            <img
-              src={post.author.avatar_url}
-              alt={post.author.name}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <span className="text-sm font-semibold text-neutral-500">
-              {post.author.name.charAt(0).toUpperCase()}
-            </span>
+      <div className="flex items-center gap-3 p-4">
+        <Avatar src={author.photo} name={author.name} size={44} online={author.online} ring="gold" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate font-semibold text-ink-100">{author.name}</span>
+            {author.role === 'admin' && <span className="gold-chip">Admin</span>}
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-ink-400">
+            <span className="truncate">{author.parish}</span>
+            <span>·</span>
+            <span>{timeAgo(post.createdAt)}</span>
+          </div>
+        </div>
+
+        {/* Menu */}
+        <div className="relative">
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            className="rounded-full p-2 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100"
+          >
+            <MoreHorizontal size={18} />
+          </button>
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+              <div className="absolute right-0 top-full z-20 mt-1 w-48 overflow-hidden rounded-xl border border-ink-600 bg-ink-800 py-1 shadow-card animate-scale-in">
+                <button
+                  onClick={() => { messageAuthor(); setMenuOpen(false); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-ink-200 hover:bg-ink-750"
+                >
+                  <Send size={14} /> Message {author.name.split(' ')[0]}
+                </button>
+                {!isAuthor && (
+                  <button
+                    onClick={() => { setFlagOpen(true); setMenuOpen(false); }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-ink-200 hover:bg-ink-750"
+                  >
+                    <Flag size={14} /> Report post
+                  </button>
+                )}
+                {(isAuthor || isAdmin) && (
+                  <button
+                    onClick={() => { deletePost(post.id); setMenuOpen(false); }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-300 hover:bg-ink-750"
+                  >
+                    <Trash2 size={14} /> Delete post
+                  </button>
+                )}
+              </div>
+            </>
           )}
         </div>
-        <div className="flex flex-col">
-          <span className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-            {post.author.name}
-          </span>
-          <span className="text-xs text-neutral-500">{timeAgo(post.created_at)}</span>
-        </div>
       </div>
 
-      {/* Text content */}
-      {post.content && (
-        <p className="mb-3 whitespace-pre-wrap text-sm text-neutral-700 dark:text-neutral-300">
-          {post.content}
-        </p>
-      )}
-
-      {/* Media */}
-      {post.media_type === "bunny" && post.video_id && (
-        <VideoPlayer
-          videoId={post.video_id}
-          poster={post.thumbnail_url}
-          className="mb-3"
-        />
-      )}
-
-      {post.media_type === "youtube" && post.video_id && (
-        <div className="mb-3">
-          <YouTubeEmbed videoId={post.video_id} />
+      {/* Text */}
+      {post.text && (
+        <div className="whitespace-pre-wrap px-4 pb-3 text-[15px] leading-relaxed text-ink-100">
+          {post.text}
         </div>
       )}
 
-      {post.media_type === "facebook" && post.video_url && (
-        <div className="mb-3">
-          <FacebookEmbed videoUrl={post.video_url} />
+      {/* Image */}
+      {post.image && (
+        <div className="border-y border-ink-700 bg-ink-900">
+          <img src={post.image} alt="" className="max-h-[520px] w-full object-cover" referrerPolicy="no-referrer" />
         </div>
       )}
 
-      {post.media_type === "image" && post.image_url && (
-        <div className="mb-3 overflow-hidden rounded-lg">
-          <img
-            src={post.image_url}
-            alt="Post media"
-            loading="lazy"
-            className="max-h-[500px] w-full object-cover"
-          />
+      {/* Flagged banner */}
+      {post.flagged && (
+        <div className="flex items-center gap-2 border-y border-red-500/30 bg-red-500/10 px-4 py-2 text-xs text-red-300">
+          <ShieldAlert size={14} /> Flagged: {post.flagReason}
+          {isAdmin && (
+            <button
+              onClick={() => unflagPost(post.id)}
+              className="ml-auto rounded px-2 py-0.5 text-red-200 underline"
+            >
+              clear
+            </button>
+          )}
         </div>
       )}
+
+      {/* Counts */}
+      <div className="flex items-center justify-between px-4 py-2 text-xs text-ink-400">
+        <span className="flex items-center gap-1">
+          {post.likes.length > 0 && (
+            <>
+              <Heart size={12} className="fill-gold-400 text-gold-400" /> {post.likes.length}
+            </>
+          )}
+        </span>
+        {post.comments.length > 0 && (
+          <button onClick={() => setShowComments((v) => !v)} className="hover:text-gold-200">
+            {post.comments.length} comment{post.comments.length !== 1 ? 's' : ''}
+          </button>
+        )}
+      </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-6 border-t border-neutral-100 pt-3 dark:border-neutral-700">
+      <div className="flex items-center gap-1 border-t border-ink-700 px-2 py-1">
         <button
-          type="button"
-          onClick={handleLike}
-          className={`flex items-center gap-1.5 text-sm transition ${
-            liked
-              ? "text-red-500"
-              : "text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
+          onClick={() => toggleLike(post.id)}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${
+            liked ? 'text-gold-300 hover:bg-gold-400/10' : 'text-ink-300 hover:bg-ink-800'
           }`}
         >
-          <span aria-hidden="true">{liked ? "❤️" : "🤍"}</span>
-          <span>Like</span>
+          <Heart size={18} className={liked ? 'fill-gold-400' : ''} />
+          {liked ? 'Liked' : 'Like'}
         </button>
         <button
-          type="button"
-          onClick={() => onComment?.(post.id)}
-          className="flex items-center gap-1.5 text-sm text-neutral-500 transition hover:text-neutral-700 dark:hover:text-neutral-300"
+          onClick={() => setShowComments((v) => !v)}
+          className="flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium text-ink-300 transition-colors hover:bg-ink-800"
         >
-          <span aria-hidden="true">💬</span>
-          <span>Comment</span>
+          <MessageSquare size={18} /> Comment
         </button>
       </div>
+
+      {/* Comments */}
+      {showComments && (
+        <div className="border-t border-ink-700 p-4 animate-fade-in">
+          <div className="space-y-3">
+            {post.comments.map((c) => {
+              const ca = users.find((u) => u.id === c.authorId);
+              if (!ca) return null;
+              return (
+                <div key={c.id} className="flex gap-2.5">
+                  <Avatar src={ca.photo} name={ca.name} size={32} />
+                  <div className="flex-1">
+                    <div className="rounded-2xl rounded-tl-sm bg-ink-800 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-ink-100">{ca.name}</span>
+                        {ca.role === 'admin' && <span className="gold-chip py-0">Admin</span>}
+                      </div>
+                      <p className="mt-0.5 text-sm text-ink-200">{c.text}</p>
+                    </div>
+                    <div className="mt-1 pl-2 text-[10px] text-ink-400">{timeAgo(c.createdAt)}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Compose comment */}
+          <div className="mt-3 flex gap-2.5">
+            <Avatar src={me.photo} name={me.name} size={32} />
+            <div className="flex flex-1 items-center gap-2 rounded-2xl rounded-tl-sm bg-ink-800 px-3 py-1.5">
+              <input
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && submitComment()}
+                placeholder="Write a comment…"
+                className="flex-1 bg-transparent text-sm text-ink-100 outline-none placeholder-ink-400"
+              />
+              <button
+                onClick={submitComment}
+                disabled={!comment.trim()}
+                className="text-gold-300 transition-colors hover:text-gold-200 disabled:opacity-40"
+              >
+                <Send size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Flag modal */}
+      {flagOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-fade-in" onClick={() => setFlagOpen(false)}>
+          <div className="card w-full max-w-md p-5 animate-scale-in" onClick={(e) => e.stopPropagation()}>
+            <h3 className="flex items-center gap-2 text-lg font-semibold text-ink-100">
+              <Flag size={18} className="text-gold-300" /> Report this post
+            </h3>
+            <p className="mt-1 text-sm text-ink-400">Let admins know why this post shouldn’t be here.</p>
+            <select
+              value={flagReason}
+              onChange={(e) => setFlagReason(e.target.value)}
+              className="input mt-4"
+            >
+              <option value="">Select a reason…</option>
+              <option value="Spam or scam">Spam or scam</option>
+              <option value="Harassment or hate">Harassment or hate</option>
+              <option value="Off-topic / not Orthodox-related">Off-topic</option>
+              <option value="Inappropriate content">Inappropriate content</option>
+              <option value="Other">Other</option>
+            </select>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setFlagOpen(false)} className="ghost-btn py-2">Cancel</button>
+              <button
+                onClick={() => { if (flagReason) { flagPost(post.id, flagReason); setFlagOpen(false); } }}
+                disabled={!flagReason}
+                className="gold-btn py-2"
+              >
+                Submit report
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </article>
   );
 }
-
-export default PostCard;

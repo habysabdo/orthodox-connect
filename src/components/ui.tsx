@@ -1,10 +1,8 @@
 import { useState, type ReactNode } from 'react';
 
 interface AvatarProps {
-  /** may be absent for a member whose profile has no photo */
-  src?: string | null;
-  /** may be absent for a member record that arrived without a name */
-  name?: string | null;
+  src: string;
+  name: string;
   size?: number;
   online?: boolean;
   ring?: 'gold' | 'none';
@@ -13,19 +11,12 @@ interface AvatarProps {
 
 export function Avatar({ src, name, size = 40, online, ring = 'none', className = '' }: AvatarProps) {
   const [err, setErr] = useState(false);
-  // Members reach this component from the API, from a localStorage cache and from
-  // notification payloads, so neither the name nor the photo is guaranteed to be
-  // a string. Both are coerced here rather than at every call site.
-  const label = (name ?? '').trim();
-  const photo = (src ?? '').trim();
-  const initials =
-    label
-      .split(' ')
-      .filter(Boolean)
-      .map((part) => part[0])
-      .slice(0, 2)
-      .join('')
-      .toUpperCase() || '?';
+  const initials = name
+    .split(' ')
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
   return (
     <div
       className={`relative shrink-0 ${className}`}
@@ -36,16 +27,16 @@ export function Avatar({ src, name, size = 40, online, ring = 'none', className 
           ring === 'gold' ? 'gold-ring' : ''
         }`}
       >
-        {!err && photo ? (
+        {!err ? (
           <img
-            src={photo}
-            alt={label}
+            src={src}
+            alt={name}
             onError={() => setErr(true)}
             className="h-full w-full object-cover"
             referrerPolicy="no-referrer"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-gold-500 to-gold-700 text-sm font-bold text-[#17130a]">
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-gold-500 to-gold-700 text-sm font-bold text-ink-950">
             {initials}
           </div>
         )}
@@ -66,7 +57,7 @@ export function Logo({ size = 36, withText = false }: { size?: number; withText?
   return (
     <div className="flex items-center gap-2.5">
       <div
-        className="relative flex items-center justify-center rounded-xl bg-gradient-to-br from-gold-300 to-gold-600 text-[#17130a] shadow-gold"
+        className="relative flex items-center justify-center rounded-xl bg-gradient-to-br from-gold-300 to-gold-600 text-ink-950 shadow-gold"
         style={{ width: size, height: size }}
       >
         <svg viewBox="0 0 24 24" fill="none" className="h-3/5 w-3/5">
@@ -141,100 +132,6 @@ export function EmptyState({
       <p className="font-semibold text-ink-100">{title}</p>
       {subtitle && <p className="mt-1 max-w-sm text-sm text-ink-400">{subtitle}</p>}
       {action && <div className="mt-4">{action}</div>}
-    </div>
-  );
-}
-
-export function Spinner({ size = 24, className = '' }: { size?: number; className?: string }) {
-  return (
-    <span
-      role="status"
-      aria-label="Loading"
-      className={`inline-block animate-spin rounded-full border-2 border-ink-600 border-t-gold-400 ${className}`}
-      style={{ width: size, height: size }}
-    />
-  );
-}
-
-// Full-screen loading state shown while the persisted auth session is being
-// restored, so logged-in users aren't briefly redirected to the landing page.
-export function LoadingScreen({ label = 'Loading…' }: { label?: string }) {
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-ink-950">
-      <Logo size={48} withText />
-      <div className="flex items-center gap-3 text-ink-400">
-        <Spinner size={20} />
-        <span className="text-sm">{label}</span>
-      </div>
-    </div>
-  );
-}
-
-// Neutral shimmering placeholder block. Building loading states out of these
-// (instead of a spinner) keeps the layout stable so content swaps in without a
-// jump when it arrives.
-export function Skeleton({ className = '' }: { className?: string }) {
-  return <div className={`animate-pulse rounded-md bg-ink-800 ${className}`} />;
-}
-
-// Placeholder for a single feed post while the feed loads.
-export function PostSkeleton() {
-  return (
-    <div className="card space-y-3 p-4">
-      <div className="flex items-center gap-3">
-        <Skeleton className="h-11 w-11 rounded-full" />
-        <div className="flex-1 space-y-2">
-          <Skeleton className="h-3.5 w-1/3" />
-          <Skeleton className="h-3 w-1/4" />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <Skeleton className="h-3.5 w-full" />
-        <Skeleton className="h-3.5 w-5/6" />
-        <Skeleton className="h-3.5 w-2/3" />
-      </div>
-      <Skeleton className="h-52 w-full rounded-xl" />
-      <div className="flex gap-4 pt-1">
-        <Skeleton className="h-4 w-16" />
-        <Skeleton className="h-4 w-16" />
-        <Skeleton className="h-4 w-16" />
-      </div>
-    </div>
-  );
-}
-
-// A short stack of post placeholders for the feed loading state.
-export function FeedSkeleton({ count = 3 }: { count?: number }) {
-  return (
-    <div className="space-y-4" aria-hidden="true">
-      {Array.from({ length: count }).map((_, index) => (
-        <PostSkeleton key={index} />
-      ))}
-    </div>
-  );
-}
-
-// Placeholder for a person card used across the network view.
-export function PersonCardSkeleton() {
-  return (
-    <div className="card flex items-center gap-3 p-3">
-      <Skeleton className="h-12 w-12 rounded-full" />
-      <div className="flex-1 space-y-2">
-        <Skeleton className="h-3.5 w-1/2" />
-        <Skeleton className="h-3 w-1/3" />
-      </div>
-      <Skeleton className="h-8 w-16 rounded-lg" />
-    </div>
-  );
-}
-
-// A grid of person placeholders for the network loading state.
-export function PeopleSkeleton({ count = 6 }: { count?: number }) {
-  return (
-    <div className="grid gap-3 sm:grid-cols-2" aria-hidden="true">
-      {Array.from({ length: count }).map((_, index) => (
-        <PersonCardSkeleton key={index} />
-      ))}
     </div>
   );
 }

@@ -1,6 +1,15 @@
 import {
+  seedAlerts,
+  seedEvents,
+  seedFriendships,
+  seedLiveStream,
+  seedPosts,
+  seedThreads,
+  seedUsers,
+} from '../data/seed';
+import { ADMIN_EMAIL } from '../types';
+import {
   friendsOf,
-  groupCacheKey,
   threadIdFor,
   uid,
   type AppState,
@@ -10,7 +19,6 @@ import type {
   ChatMessage,
   CommunityAlert,
   Friendship,
-  Group,
   Friendship as _F,
   LiveChatMessage,
   LiveStream,
@@ -18,33 +26,12 @@ import type {
   Thread,
   User,
 } from '../types';
-import { loadCachedAppState } from './persistence';
-import { postComments, postLikes } from '../utils/postSafety';
-
-/** Add or remove an id from a like list without assuming the list exists. */
-function toggled(ids: string[], userId: string): string[] {
-  return ids.includes(userId) ? ids.filter((id) => id !== userId) : [...ids, userId];
-}
 
 export type Action =
   | { type: 'SIGN_IN'; user: User }
-  | { type: 'AUTH_CHECKED' }
-  | { type: 'COMPLETE_ONBOARDING'; data: { name: string; age: number; photo: string; parish: string; bio?: string } }
-  | { type: 'HYDRATE_PROFILE'; userId: string; data: Partial<User> }
-  | { type: 'HYDRATE_USERS'; users: User[] }
-  | { type: 'HYDRATE_GROUPS'; groups: Group[] }
-  | { type: 'SET_ACTIVE_GROUP'; groupId: string | null }
-  | { type: 'HYDRATE_FRIENDSHIPS'; friendships: Friendship[] }
-  | { type: 'HYDRATE_POSTS'; posts: Post[]; cacheKey?: string; hasMore?: boolean }
-  | { type: 'APPEND_POSTS'; posts: Post[]; cacheKey: string; hasMore: boolean }
-  | { type: 'SET_POSTS_LOADING'; loading: boolean }
-  | { type: 'SET_POSTS_LOADING_MORE'; loading: boolean }
-  | { type: 'HYDRATE_THREADS'; threads: Thread[] }
+  | { type: 'COMPLETE_ONBOARDING'; data: { name: string; age: number; photo: string; parish: string } }
   | { type: 'SIGN_OUT' }
-  | { type: 'CREATE_POST'; post: Post; cacheKey: string }
-  | { type: 'RESHARE_POST'; post: Post; cacheKey: string; originalPostId: string }
-  | { type: 'UPDATE_POST'; post: Post }
-  | { type: 'UPSERT_POST'; post: Post; cacheKey: string }
+  | { type: 'CREATE_POST'; post: Post }
   | { type: 'TOGGLE_LIKE'; postId: string; userId: string }
   | { type: 'ADD_COMMENT'; postId: string; comment: { id: string; authorId: string; text: string; createdAt: number } }
   | { type: 'FLAG_POST'; postId: string; reason: string }
@@ -54,7 +41,7 @@ export type Action =
   | { type: 'ACCEPT_FRIEND'; from: string; to: string }
   | { type: 'REMOVE_FRIEND'; a: string; b: string }
   | { type: 'SEND_MESSAGE'; message: ChatMessage }
-  | { type: 'MARK_THREAD_READ'; threadId: string; userId: string; readAt: number }
+  | { type: 'MARK_THREAD_READ'; threadId: string; userId: string }
   | { type: 'ENSURE_THREAD'; thread: Thread }
   | { type: 'GO_LIVE'; stream: LiveStream }
   | { type: 'END_LIVE'; streamId: string; hostId: string }
@@ -68,248 +55,53 @@ export type Action =
   | { type: 'TOGGLE_USER_ONLINE'; userId: string; online: boolean };
 
 export function initialState(): AppState {
-  const cached = loadCachedAppState();
-  const postsCache = cached?.postsCache ?? {};
-  const publicPosts = postsCache[groupCacheKey(null)] ?? [];
-
-  // Normalize user ID in case cached user references subject_id
-  const cachedUser = cached?.user
-    ? { ...cached.user, id: (cached.user as Record<string, unknown>).subject_id as string || cached.user.id }
-    : null;
-
   return {
-    users: cachedUser ? [cachedUser] : [],
-    currentUserId: cachedUser?.id ?? null,
-    authChecked: false,
-    groups: [],
-    activeGroupId: null,
-    posts: publicPosts,
-    postsCache,
-    postsHasMoreCache: cached?.postsHasMoreCache ?? {},
-    postsLoading: !cached,
-    postsLoadingMore: false,
-    postsHasMore: cached?.postsHasMoreCache[groupCacheKey(null)] ?? false,
-    usersLoading: true,
-    groupsLoading: true,
-    friendships: [],
-    threads: [],
-    streams: [],
-    events: [],
-    alerts: [],
+    users: seedUsers,
+    currentUserId: null,
+    posts: seedPosts,
+    friendships: seedFriendships,
+    threads: seedThreads,
+    streams: [seedLiveStream],
+    events: seedEvents,
+    alerts: seedAlerts,
   };
 }
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
-    case 'SIGN_IN': {
-      const normalizedUser = {
-        ...action.user,
-        id: (action.user as Record<string, unknown>).subject_id as string || action.user.id,
-      };
-      return { 
-        ...state, 
-        users: upsertUser(state.users, normalizedUser), 
-        currentUserId: normalizedUser.id, 
-        authChecked: true 
-      };
-    }
-
-    case 'AUTH_CHECKED':
-      return state.authChecked ? state : { ...state, authChecked: true };
+    case 'SIGN_IN':
+      return { ...state, users: upsertUser(state.users, action.user), currentUserId: action.user.id };
 
     case 'COMPLETE_ONBOARDING': {
       if (!state.currentUserId) return state;
       return {
         ...state,
         users: state.users.map((u) =>
-          u?.id === state.currentUserId
+          u.id === state.currentUserId
             ? { ...u, ...action.data, onboarded: true }
             : u,
         ),
       };
     }
 
-    case 'HYDRATE_PROFILE':
-      return {
-        ...state,
-        users: state.users.map((u) => {
-          const targetId = (u as Record<string, unknown>)?.subject_id as string || u?.id;
-          return targetId === action.userId ? { ...u, ...action.data, id: u.id } : u;
-        }),
-      };
-
-    case 'HYDRATE_USERS': {
-      // Normalize users payload so subject_id maps cleanly to id
-      const normalizedUsers = action.users.map((u) => ({
-        ...u,
-        id: (u as Record<string, unknown>)?.subject_id as string || u?.id,
-      }));
-
-      const me = state.users.find((u) => u?.id === state.currentUserId);
-      const usersById = new Map<string, User>();
-      
-      for (const user of normalizedUsers) {
-        if (user?.id) usersById.set(user.id, user);
-      }
-      
-      if (me) {
-        const existing = usersById.get(me.id);
-        usersById.set(me.id, existing ? { ...existing, ...me } : me);
-      }
-
-      return { ...state, users: Array.from(usersById.values()), usersLoading: false };
-    }
-
-    case 'HYDRATE_GROUPS':
-      return { ...state, groups: action.groups, groupsLoading: false };
-
-    case 'SET_ACTIVE_GROUP':
-      return {
-        ...state,
-        activeGroupId: action.groupId,
-        postsHasMore: state.postsHasMoreCache[groupCacheKey(action.groupId)] ?? false,
-      };
-
-    case 'HYDRATE_FRIENDSHIPS':
-      return { ...state, friendships: action.friendships };
-
-    case 'HYDRATE_POSTS':
-      return {
-        ...state,
-        posts:
-          !action.cacheKey || action.cacheKey === groupCacheKey(state.activeGroupId)
-            ? action.posts
-            : state.posts,
-        postsLoading: false,
-        postsLoadingMore: false,
-        postsHasMore: action.hasMore ?? state.postsHasMore,
-        postsCache: action.cacheKey
-          ? { ...state.postsCache, [action.cacheKey]: action.posts }
-          : state.postsCache,
-        postsHasMoreCache: action.cacheKey && action.hasMore !== undefined
-          ? { ...state.postsHasMoreCache, [action.cacheKey]: action.hasMore }
-          : state.postsHasMoreCache,
-      };
-
-    case 'APPEND_POSTS': {
-      const existing = state.postsCache[action.cacheKey] ?? [];
-      const ids = new Set(existing.map((post) => post.id));
-      const combined = [...existing, ...action.posts.filter((post) => !ids.has(post.id))];
-      return {
-        ...state,
-        posts: action.cacheKey === groupCacheKey(state.activeGroupId) ? combined : state.posts,
-        postsCache: { ...state.postsCache, [action.cacheKey]: combined },
-        postsHasMoreCache: { ...state.postsHasMoreCache, [action.cacheKey]: action.hasMore },
-        postsHasMore: action.cacheKey === groupCacheKey(state.activeGroupId) ? action.hasMore : state.postsHasMore,
-        postsLoadingMore: false,
-      };
-    }
-
-    case 'SET_POSTS_LOADING':
-      return { ...state, postsLoading: action.loading };
-
-    case 'SET_POSTS_LOADING_MORE':
-      return { ...state, postsLoadingMore: action.loading };
-
-    case 'HYDRATE_THREADS':
-      return { ...state, threads: action.threads };
-
     case 'SIGN_OUT':
-      return {
-        ...state,
-        currentUserId: null,
-        groups: [],
-        activeGroupId: null,
-        posts: [],
-        postsCache: {},
-        postsHasMoreCache: {},
-        postsLoading: false,
-        postsLoadingMore: false,
-        postsHasMore: false,
-        usersLoading: true,
-        groupsLoading: true,
-      };
-
-    case 'UPDATE_POST':
-      return {
-        ...state,
-        posts: state.posts.map((post) => (post.id === action.post.id ? action.post : post)),
-        postsCache: Object.fromEntries(
-          Object.entries(state.postsCache).map(([key, posts]) => [
-            key,
-            posts.map((post) => (post.id === action.post.id ? action.post : post)),
-          ]),
-        ),
-      };
-
-    case 'UPSERT_POST':
-      return {
-        ...state,
-        posts: [action.post, ...state.posts.filter((post) => post.id !== action.post.id)],
-        postsCache: {
-          ...state.postsCache,
-          [action.cacheKey]: [
-            action.post,
-            ...(state.postsCache[action.cacheKey] ?? []).filter((post) => post.id !== action.post.id),
-          ],
-        },
-      };
+      return { ...state, currentUserId: null };
 
     case 'CREATE_POST':
-      return {
-        ...state,
-        posts: [action.post, ...state.posts.filter((post) => post.id !== action.post.id)],
-        postsCache: {
-          ...state.postsCache,
-          [action.cacheKey]: [
-            action.post,
-            ...(state.postsCache[action.cacheKey] ?? []).filter((post) => post.id !== action.post.id),
-          ],
-        },
-      };
-
-    case 'RESHARE_POST': {
-      const updateShareCount = (post: Post): Post => {
-        if (post.id === action.originalPostId) return { ...post, shareCount: (post.shareCount ?? 0) + 1 };
-        if (post.originalPost?.id === action.originalPostId) {
-          return {
-            ...post,
-            shareCount: (post.shareCount ?? 0) + 1,
-            originalPost: { ...post.originalPost, shareCount: (post.originalPost.shareCount ?? 0) + 1 },
-          };
-        }
-        return post;
-      };
-      const posts = [action.post, ...state.posts.map(updateShareCount).filter((post) => post.id !== action.post.id)];
-      return {
-        ...state,
-        posts,
-        postsCache: Object.fromEntries(
-          Object.entries(state.postsCache).map(([key, cachedPosts]) => [
-            key,
-            key === action.cacheKey
-              ? [action.post, ...cachedPosts.map(updateShareCount).filter((post) => post.id !== action.post.id)]
-              : cachedPosts.map(updateShareCount),
-          ]),
-        ),
-      };
-    }
+      return { ...state, posts: [action.post, ...state.posts] };
 
     case 'TOGGLE_LIKE':
       return {
         ...state,
         posts: state.posts.map((p) =>
           p.id === action.postId
-            ? { ...p, likes: toggled(postLikes(p), action.userId) }
-            : p.originalPost?.id === action.postId
-              ? {
-                  ...p,
-                  originalPost: {
-                    ...p.originalPost,
-                    likes: toggled(postLikes(p.originalPost), action.userId),
-                  },
-                }
-              : p,
+            ? {
+                ...p,
+                likes: p.likes.includes(action.userId)
+                  ? p.likes.filter((id) => id !== action.userId)
+                  : [...p.likes, action.userId],
+              }
+            : p,
         ),
       };
 
@@ -318,10 +110,8 @@ export function reducer(state: AppState, action: Action): AppState {
         ...state,
         posts: state.posts.map((p) =>
           p.id === action.postId
-            ? { ...p, comments: [...postComments(p), action.comment] }
-            : p.originalPost?.id === action.postId
-              ? { ...p, originalPost: { ...p.originalPost, comments: [...postComments(p.originalPost), action.comment] } }
-              : p,
+            ? { ...p, comments: [...p.comments, action.comment] }
+            : p,
         ),
       };
 
@@ -342,16 +132,7 @@ export function reducer(state: AppState, action: Action): AppState {
       };
 
     case 'DELETE_POST':
-      return {
-        ...state,
-        posts: state.posts.filter((post) => post.id !== action.postId),
-        postsCache: Object.fromEntries(
-          Object.entries(state.postsCache).map(([key, posts]) => [
-            key,
-            posts.filter((post) => post.id !== action.postId),
-          ]),
-        ),
-      };
+      return { ...state, posts: state.posts.filter((p) => p.id !== action.postId) };
 
     case 'ADD_FRIEND':
       return { ...state, friendships: upsertFriendship(state.friendships, action.from, action.to, 'outgoing') };
@@ -382,14 +163,7 @@ export function reducer(state: AppState, action: Action): AppState {
         ...state,
         threads: state.threads.map((t) =>
           t.id === action.threadId
-            ? {
-                ...t,
-                messages: t.messages.map((m) =>
-                  m.senderId !== action.userId && !m.isRead
-                    ? { ...m, isRead: true, readAt: action.readAt }
-                    : m,
-                ),
-              }
+            ? { ...t, messages: t.messages.map((m) => (m.senderId !== action.userId ? { ...m, read: true } : m)) }
             : t,
         ),
       };
@@ -464,7 +238,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'TOGGLE_USER_ONLINE':
       return {
         ...state,
-        users: state.users.map((u) => (u?.id === action.userId ? { ...u, online: action.online } : u)),
+        users: state.users.map((u) => (u.id === action.userId ? { ...u, online: action.online } : u)),
       };
 
     default:
@@ -473,13 +247,9 @@ export function reducer(state: AppState, action: Action): AppState {
 }
 
 function upsertUser(users: User[], user: User): User[] {
-  const userId = (user as Record<string, unknown>).subject_id as string || user.id;
-  const exists = users.some((u) => ((u as Record<string, unknown>)?.subject_id as string || u?.id) === userId);
-
-  if (exists) {
-    return users.map((u) => (((u as Record<string, unknown>)?.subject_id as string || u?.id) === userId ? { ...u, ...user } : u));
-  }
-  return [...users, { ...user, id: userId }];
+  const exists = users.some((u) => u.id === user.id);
+  if (exists) return users.map((u) => (u.id === user.id ? { ...u, ...user } : u));
+  return [...users, user];
 }
 
 function upsertFriendship(
@@ -509,4 +279,5 @@ function upsertFriendship(
   ];
 }
 
+// keep lint happy about unused import path while still re-exporting helpers
 export const selectors = { friendsOf, threadIdFor };

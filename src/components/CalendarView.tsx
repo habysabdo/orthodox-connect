@@ -94,7 +94,7 @@ export function CalendarView() {
                   } ${isSelected ? 'bg-gold-400/15 shadow-[inset_0_0_0_1px_rgba(212,175,55,0.5)]' : ''}`}
                 >
                   <span className={`flex h-6 w-6 items-center justify-center rounded-full ${
-                    isToday ? 'bg-gold-400 font-bold text-[#17130a]' : ''
+                    isToday ? 'bg-gold-400 font-bold text-ink-950' : ''
                   }`}>
                     {cell.date.getDate()}
                   </span>

@@ -3,17 +3,16 @@ import { Avatar } from './ui';
 import { useStore, friendsOf, unreadCountFor, threadForUsers } from '@/store/context';
 import { useUI } from '@/store/ui';
 import { clockTime, liveDuration } from '@/utils/format';
-import { userName } from '@/utils/postSafety';
 import { useEffect, useState } from 'react';
 import type { ChatMessage } from '@/types';
 
 export function RightSidebar({ onClose }: { onClose?: () => void }) {
   const state = useStore();
   const { setView, setOpenStreamId, setOpenThreadId, setRightOpen } = useUI();
-  const me = state.users.find((u) => u?.id === state.currentUserId);
+  const me = state.users.find((u) => u.id === state.currentUserId);
   if (!me) return null;
 
-  const activeStreams = state.streams.filter((s) => s?.active);
+  const activeStreams = state.streams.filter((s) => s.active);
   const friends = friendsOf(state, me.id);
   const unread = unreadCountFor(state, me.id);
 
@@ -45,7 +44,7 @@ export function RightSidebar({ onClose }: { onClose?: () => void }) {
             </div>
           )}
           {activeStreams.map((s) => {
-            const host = state.users.find((u) => u?.id === s.hostId);
+            const host = state.users.find((u) => u.id === s.hostId);
             if (!host) return null;
             return (
               <button
@@ -63,7 +62,7 @@ export function RightSidebar({ onClose }: { onClose?: () => void }) {
                   <div className="truncate text-sm font-semibold text-ink-100 group-hover:text-gold-200">
                     {s.title}
                   </div>
-                  <div className="truncate text-xs text-ink-400">{userName(host)}</div>
+                  <div className="truncate text-xs text-ink-400">{host.name}</div>
                 </div>
                 <div className="flex flex-col items-end text-xs text-ink-400">
                   <span className="flex items-center gap-1">
@@ -83,7 +82,7 @@ export function RightSidebar({ onClose }: { onClose?: () => void }) {
           <MessageCircle size={16} className="text-gold-300" />
           <span className="text-sm font-bold text-ink-100">Active Chats</span>
           {unread > 0 && (
-            <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-gold-400 px-1.5 text-[11px] font-bold text-[#17130a]">
+            <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-gold-400 px-1.5 text-[11px] font-bold text-ink-950">
               {unread}
             </span>
           )}
@@ -96,12 +95,10 @@ export function RightSidebar({ onClose }: { onClose?: () => void }) {
           )}
           {friends.map((f) => {
             const thread = threadForUsers(state, me.id, f.id);
-            // A thread rebuilt from a cached payload may have no `messages` array.
-            const messages = Array.isArray(thread?.messages) ? thread.messages : [];
-            const last = messages[messages.length - 1];
-            const lastUnread = messages.filter(
-              (m: ChatMessage) => m.senderId !== me.id && !m.isRead,
-            ).length;
+            const last = thread?.messages[thread.messages.length - 1];
+            const lastUnread = thread
+              ? thread.messages.filter((m: ChatMessage) => m.senderId !== me.id && !m.read).length
+              : 0;
             return (
               <button
                 key={f.id}
@@ -122,16 +119,16 @@ export function RightSidebar({ onClose }: { onClose?: () => void }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <div className="truncate text-sm font-semibold text-ink-100 group-hover:text-gold-200">
-                      {userName(f)}
+                      {f.name}
                     </div>
                     {last && <span className="shrink-0 text-[10px] text-ink-400">{clockTime(last.createdAt)}</span>}
                   </div>
                   <div className={`truncate text-xs ${lastUnread ? 'font-semibold text-gold-200' : 'text-ink-400'}`}>
-                    {last ? (last.senderId === me.id ? 'You: ' : '') + (last.text ?? '') : 'Say hello 👋'}
+                    {last ? (last.senderId === me.id ? 'You: ' : '') + last.text : 'Say hello 👋'}
                   </div>
                 </div>
                 {lastUnread > 0 && (
-                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gold-400 px-1.5 text-[11px] font-bold text-[#17130a]">
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gold-400 px-1.5 text-[11px] font-bold text-ink-950">
                     {lastUnread}
                   </span>
                 )}

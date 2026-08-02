@@ -2,24 +2,20 @@ import { AlertTriangle, Info, Megaphone, X } from 'lucide-react';
 import { useStore } from '@/store/context';
 import type { CommunityAlert } from '@/types';
 
-const ALERT_STYLES = {
-  info: { icon: <Info size={16} />, cls: 'border-gold-400/40 bg-gold-400/5 text-gold-200' },
-  warning: { icon: <AlertTriangle size={16} />, cls: 'border-amber-500/40 bg-amber-500/5 text-amber-200' },
-  urgent: { icon: <Megaphone size={16} />, cls: 'border-red-500/40 bg-red-500/5 text-red-200' },
-} as const;
-
-export function CommunityAlerts({ alerts }: { alerts?: CommunityAlert[] | null }) {
+export function CommunityAlerts({ alerts }: { alerts: CommunityAlert[] }) {
   const { currentUserId, dismissAlert } = useStore();
-  const visible = (Array.isArray(alerts) ? alerts : []).filter(Boolean).slice(0, 2);
-  if (visible.length === 0) return null;
+  if (alerts.length === 0) return null;
+  const visible = alerts.slice(0, 2);
 
   return (
     <div className="space-y-2">
       {visible.map((a) => {
         const mine = a.createdBy === currentUserId;
-        // An alert stored with an unrecognised level still has to render, so an
-        // unknown value falls back to the neutral 'info' styling.
-        const styles = ALERT_STYLES[a.level] ?? ALERT_STYLES.info;
+        const styles = {
+          info: { icon: <Info size={16} />, cls: 'border-gold-400/40 bg-gold-400/5 text-gold-200' },
+          warning: { icon: <AlertTriangle size={16} />, cls: 'border-amber-500/40 bg-amber-500/5 text-amber-200' },
+          urgent: { icon: <Megaphone size={16} />, cls: 'border-red-500/40 bg-red-500/5 text-red-200' },
+        }[a.level];
         return (
           <div key={a.id} className={`card flex items-start gap-3 border p-3 ${styles.cls}`}>
             <span className="mt-0.5">{styles.icon}</span>

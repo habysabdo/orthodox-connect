@@ -1,52 +1,35 @@
 import {
   CalendarDays,
-  Clapperboard,
-  Compass,
   Home,
   LogOut,
   Radio,
   Shield,
-  Sun,
+  Users,
   MessageCircle,
-  Moon,
   UserCircle,
-  Share2,
-  Video,
   X,
 } from 'lucide-react';
 import { Avatar, Logo } from './ui';
 import { useStore, unreadCountFor } from '@/store/context';
 import { useUI, type ViewKey } from '@/store/ui';
-import { useI18n } from '@/i18n';
-import { hasAdminAccess } from '@/utils/users';
-import { userName } from '@/utils/postSafety';
-import { useTheme } from '@/theme-context';
-import { LanguageSwitcher } from './LanguageSwitcher';
 
 export function LeftSidebar({ onClose }: { onClose?: () => void }) {
   const state = useStore();
   const { users, currentUserId, signOut } = state;
-  const { view, setView, setGoLiveOpen, setShareOpen, setPrayerMeetingOpen } = useUI();
-  const { t } = useI18n();
-  const { theme, toggleTheme } = useTheme();
-  const me = users.find((u) => u?.id === currentUserId);
+  const { view, setView, setGoLiveOpen } = useUI();
+  const me = users.find((u) => u.id === currentUserId);
   if (!me) return null;
 
   const unread = unreadCountFor(state, me.id);
-  const openShare = () => {
-    onClose?.();
-    setShareOpen(true);
-  };
 
-  const nav: { key: ViewKey; label: string; icon: React.ReactNode; badge?: number; href?: string }[] = [
-    { key: 'feed', label: t('nav.feed'), icon: <Home size={20} /> },
-    { key: 'reels', label: t('nav.reels'), icon: <Clapperboard size={20} /> },
-    { key: 'messenger', label: t('nav.messages'), icon: <MessageCircle size={20} />, badge: unread || undefined },
-    { key: 'calendar', label: t('nav.calendar'), icon: <CalendarDays size={20} /> },
-    { key: 'groups', label: t('nav.groups'), icon: <Compass size={20} /> },
-    { key: 'profile', label: t('nav.profile'), icon: <UserCircle size={20} /> },
-    ...(hasAdminAccess(me)
-      ? [{ key: 'admin' as ViewKey, label: t('nav.admin'), icon: <Shield size={20} />, href: '/admin' }]
+  const nav: { key: ViewKey; label: string; icon: React.ReactNode; badge?: number }[] = [
+    { key: 'feed', label: 'Home Feed', icon: <Home size={20} /> },
+    { key: 'network', label: 'My Network', icon: <Users size={20} /> },
+    { key: 'messenger', label: 'Messages', icon: <MessageCircle size={20} />, badge: unread || undefined },
+    { key: 'calendar', label: 'Calendar', icon: <CalendarDays size={20} /> },
+    { key: 'profile', label: 'Profile', icon: <UserCircle size={20} /> },
+    ...(me.role === 'admin'
+      ? [{ key: 'admin' as ViewKey, label: 'Admin Panel', icon: <Shield size={20} /> }]
       : []),
   ];
 
@@ -70,8 +53,8 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
           <Radio size={20} />
         </span>
         <div className="flex-1">
-          <div className="text-sm font-bold text-gold-100">{t('header.goLive')}</div>
-          <div className="text-xs text-ink-400">{t('header.broadcast')}</div>
+          <div className="text-sm font-bold text-gold-100">Go Live</div>
+          <div className="text-xs text-ink-400">Broadcast to the community</div>
         </div>
         <span className="flex h-2.5 w-2.5">
           <span className="absolute inline-flex h-2.5 w-2.5 animate-ping rounded-full bg-red-500/70" />
@@ -79,103 +62,33 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
         </span>
       </button>
 
-      {/* Prayer meeting CTA */}
-      <button
-        onClick={() => {
-          onClose?.();
-          setPrayerMeetingOpen(true);
-        }}
-        className="group flex items-center gap-3 rounded-2xl border border-ink-700 bg-ink-850/60 px-4 py-3 text-left transition-all hover:border-gold-400/50 hover:bg-ink-800"
-      >
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-ink-800 text-gold-200 group-hover:bg-gold-400/20">
-          <Video size={20} />
-        </span>
-        <div className="flex-1">
-          <div className="text-sm font-bold text-ink-100">Start Prayer Meeting</div>
-          <div className="text-xs text-ink-400">Pray together over video</div>
-        </div>
-      </button>
-
       {/* Nav */}
       <nav className="flex flex-col gap-1">
         {nav.map((item) => {
           const active = view === item.key;
-          const className = `group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
-            active
-              ? 'bg-gold-400/10 text-gold-200 shadow-[inset_0_0_0_1px_rgba(212,175,55,0.3)]'
-              : 'text-ink-300 hover:bg-ink-800 hover:text-ink-100'
-          }`;
-          const content = (
-            <>
+          return (
+            <button
+              key={item.key}
+              onClick={() => setView(item.key)}
+              className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
+                active
+                  ? 'bg-gold-400/10 text-gold-200 shadow-[inset_0_0_0_1px_rgba(212,175,55,0.3)]'
+                  : 'text-ink-300 hover:bg-ink-800 hover:text-ink-100'
+              }`}
+            >
               <span className={active ? 'text-gold-300' : 'text-ink-400 group-hover:text-gold-300'}>
                 {item.icon}
               </span>
               <span className="flex-1 text-left">{item.label}</span>
               {item.badge ? (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gold-400 px-1.5 text-[11px] font-bold text-[#17130a]">
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gold-400 px-1.5 text-[11px] font-bold text-ink-950">
                   {item.badge}
                 </span>
               ) : null}
               {active && <span className="h-1.5 w-1.5 rounded-full bg-gold-300" />}
-            </>
-          );
-
-          if (item.href) {
-            return (
-              <a
-                key={item.key}
-                href={item.href}
-                onClick={(event) => {
-                  event.preventDefault();
-                  setView(item.key);
-                  onClose?.();
-                }}
-                className={className}
-              >
-                {content}
-              </a>
-            );
-          }
-
-          return (
-            <button
-              key={item.key}
-              onClick={() => {
-                setView(item.key);
-                onClose?.();
-              }}
-              className={className}
-            >
-              {content}
             </button>
           );
         })}
-
-        {/* Invite / share */}
-        <button
-          onClick={openShare}
-          className="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-ink-300 transition-all hover:bg-ink-800 hover:text-ink-100"
-        >
-          <span className="text-ink-400 group-hover:text-gold-300">
-            <Share2 size={20} />
-          </span>
-          <span className="flex-1 text-left">{t('share.invite')}</span>
-        </button>
-
-        <LanguageSwitcher variant="sidebar" />
-
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-ink-300 transition-all hover:bg-ink-800 hover:text-ink-100"
-          aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-        >
-          <span className="text-ink-400 group-hover:text-gold-300">
-            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-          </span>
-          <span className="flex-1 text-left">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
-        </button>
-
       </nav>
 
       <div className="flex-1" />
@@ -187,10 +100,10 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
       >
         <Avatar src={me.photo} name={me.name} size={40} online ring="gold" />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold text-ink-100">{userName(me)}</div>
-          <div className="truncate text-xs text-ink-400">{me.parish || t('profile.noParish')}</div>
+          <div className="truncate text-sm font-semibold text-ink-100">{me.name}</div>
+          <div className="truncate text-xs text-ink-400">{me.parish || 'No parish'}</div>
         </div>
-        {hasAdminAccess(me) && <span className="gold-chip">{t('common.admin')}</span>}
+        {me.role === 'admin' && <span className="gold-chip">Admin</span>}
       </button>
 
       <button
@@ -198,7 +111,7 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
         className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-ink-400 transition-colors hover:bg-ink-800 hover:text-red-300"
       >
         <LogOut size={16} />
-        {t('common.signOut')}
+        Sign out
       </button>
     </aside>
   );

@@ -1,10 +1,23 @@
+import { useState } from 'react';
 import { Eye, ShieldCheck, Sparkles, Users, Video } from 'lucide-react';
 import { Logo } from './ui';
-import { AuthModal } from './AuthModal';
-import { MobileInstallBanner } from './MobileInstallBanner';
-import { ThemeToggle } from './ThemeToggle';
+import { pickGooglePhoto, useStore } from '@/store/StoreProvider';
 
 export function Landing() {
+  const { signInWithGoogle } = useStore();
+  const [busy, setBusy] = useState(false);
+
+  const handleGoogle = async () => {
+    setBusy(true);
+    await new Promise((r) => setTimeout(r, 700));
+    signInWithGoogle({
+      email: 'new.member@example.com',
+      name: 'New Member',
+      photo: pickGooglePhoto('new.member@example.com'),
+    });
+    setBusy(false);
+  };
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-ink-950">
       {/* Ambient gold glow */}
@@ -12,21 +25,13 @@ export function Landing() {
       <div className="pointer-events-none absolute bottom-0 right-0 h-[400px] w-[400px] rounded-full bg-gold-700/10 blur-[120px]" />
 
       <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-6">
-        {/* Install banner — prominent, top of page, mobile visitors only */}
-        <div className="pt-3">
-          <MobileInstallBanner />
-        </div>
-
         {/* Top bar */}
         <header className="flex items-center justify-between py-6">
           <Logo size={40} withText />
-          <div className="flex items-center gap-2">
-            <span className="chip hidden sm:inline-flex">
-              <ShieldCheck size={14} className="text-gold-300" />
-              Private community
-            </span>
-            <ThemeToggle />
-          </div>
+          <span className="chip">
+            <ShieldCheck size={14} className="text-gold-300" />
+            Private community
+          </span>
         </header>
 
         {/* Hero — Facebook-style dual layout */}
@@ -59,10 +64,36 @@ export function Landing() {
             </p>
           </div>
 
-          {/* Right column — AuthModal replace original login box */}
+          {/* Right column — authentication box */}
           <div className="animate-slide-right lg:flex lg:justify-center">
-            <div className="w-full max-w-md">
-              <AuthModal />
+            <div className="card w-full max-w-sm p-8">
+              <h2 className="text-center text-2xl font-semibold text-ink-100">
+                Welcome to OrthodoxConnect
+              </h2>
+              <p className="mt-2 text-center text-sm text-ink-400">
+                Sign in to join your parish community.
+              </p>
+
+              <button
+                onClick={handleGoogle}
+                disabled={busy}
+                className="gold-btn mt-7 w-full justify-center px-6 py-3 text-base"
+              >
+                <GoogleIcon />
+                {busy ? 'Connecting…' : 'Continue with Google'}
+              </button>
+
+              <p className="mt-6 text-center text-xs leading-relaxed text-ink-400">
+                By continuing you agree to our{' '}
+                <a href="#" className="text-gold-300 underline-offset-2 hover:underline">
+                  Terms of Service
+                </a>{' '}
+                &{' '}
+                <a href="#" className="text-gold-300 underline-offset-2 hover:underline">
+                  Privacy Policy
+                </a>
+                .
+              </p>
             </div>
           </div>
         </main>
@@ -81,5 +112,28 @@ function FeaturePill({ icon, label }: { icon: React.ReactNode; label: string }) 
       <span className="text-gold-300">{icon}</span>
       <span className="text-xs font-medium text-ink-300">{label}</span>
     </div>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5">
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"
+      />
+    </svg>
   );
 }

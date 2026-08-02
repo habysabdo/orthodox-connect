@@ -4,22 +4,9 @@ import { useEffect, useRef } from 'react';
  * Animated "broadcast" canvas. For seed streams and user streams where no
  * webcam permission is granted, this renders a warm, moving gold/candle-light
  * pattern so the viewer sees something alive instead of a black box.
- *
- * `onCanvasReady` hands the live canvas to the caller once it is drawing, which
- * is how the Go Live modal records a simulated broadcast (`captureStream()`).
  */
-export function SimulatedCanvas({
-  className = '',
-  onCanvasReady,
-}: {
-  className?: string;
-  onCanvasReady?: (canvas: HTMLCanvasElement) => void;
-}) {
+export function SimulatedCanvas({ className = '' }: { className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  // Held in a ref so a caller passing an inline callback cannot restart the
-  // animation loop on every render.
-  const onCanvasReadyRef = useRef(onCanvasReady);
-  onCanvasReadyRef.current = onCanvasReady;
 
   useEffect(() => {
     const canvas = ref.current;
@@ -85,7 +72,6 @@ export function SimulatedCanvas({
       raf = requestAnimationFrame(draw);
     };
     draw();
-    onCanvasReadyRef.current?.(canvas);
 
     return () => {
       cancelAnimationFrame(raf);
