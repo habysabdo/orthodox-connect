@@ -82,6 +82,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const pendingPostIdsRef = useRef(new Set<string>());
   const postSavePromisesRef = useRef(new Map<string, Promise<boolean>>());
 
+  // 1. Initial Auth Restore Effect
   useEffect(() => {
     let active = true;
     let authRestoreFinished = false;
@@ -141,7 +142,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (!active) return;
         if (user) dispatch({ type: 'SIGN_IN', user });
         else if (!identity) dispatch({ type: 'SIGN_OUT' });
-        else console.warn('The signed-in account could not be refreshed; keeping the current session visible.');
       } catch (err) {
         console.error('Failed to restore session', err);
       } finally {
@@ -152,9 +152,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const handleLogout = () => {
       persistIdentityCookiesFromLocalStorage();
-      if (active) {
-        resetToSignedOut();
-      }
+      if (active) resetToSignedOut();
     };
 
     const handleLogin = (user: unknown) => {
@@ -225,6 +223,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!active || sessionCheck.status !== 'expired') return;
       await handleExpiredSession('the session could not be refreshed after the app returned to the foreground');
     };
+
     const handleForeground = () => void revalidateSession();
     document.addEventListener('visibilitychange', handleForeground);
     window.addEventListener('focus', handleForeground);
@@ -240,6 +239,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // 2. Local State Caching
   useEffect(() => {
     const user = state.users.find((candidate) => candidate?.id === state.currentUserId);
     if (!user) {
@@ -253,6 +253,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, [state.authChecked, state.currentUserId, state.postsCache, state.postsHasMoreCache, state.users]);
 
+  // 3. User Profile Hydration
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -283,6 +284,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [state.currentUserId]);
 
+  // 4. Groups Hydration
   useEffect(() => {
     if (!state.currentUserId) return;
     loadGroups()
@@ -290,6 +292,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .catch((err) => console.error('Failed to load groups', err));
   }, [state.currentUserId]);
 
+  // 5. Users & Friendships Polling
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -328,13 +331,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [state.currentUserId]);
 
+  // 6. Posts Hydration & Fetching (FIXED UNAUTHENTICATED GATE)
   useEffect(() => {
     const userId = state.currentUserId;
-    if (!userId) return;
+    
+    // 🎯 FIX: Release posts loading immediately if no user is signed in
+    if (!userId) {
+      dispatch({ type: 'SET_POSTS_LOADING', loading: false });
+      return;
+    }
+
     let cancelled = false;
     let refreshing = false;
     const key = groupCacheKey(state.activeGroupId);
     const cached = stateRef.current.postsCache[key];
+
     if (cached) {
       dispatch({
         type: 'HYDRATE_POSTS',
@@ -401,11 +412,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [state.currentUserId, state.activeGroupId]);
 
+  // 7. Messaging Threads
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
     let cancelled = false;
     let refreshing = false;
+
     const refresh = async () => {
       if (refreshing) return;
       refreshing = true;
@@ -420,6 +433,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         refreshing = false;
       }
     };
+
     const refreshWhenVisible = () => {
       if (document.visibilityState === 'visible') void refresh();
     };
@@ -428,6 +442,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const unsubscribe = subscribeToMessageChanges(userId, refreshWhenVisible);
     window.addEventListener('focus', refreshWhenVisible);
     document.addEventListener('visibilitychange', refreshWhenVisible);
+
     return () => {
       cancelled = true;
       unsubscribe();
@@ -436,32 +451,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [state.currentUserId]);
 
-  useEffect(() => {
-    if (!state.currentUserId) return;
-    let cancelled = false;
-    const verify = () => {
-      loadSessionUser()
-        .then((user) => {
-          if (cancelled) return;
-          if (user) dispatch({ type: 'SIGN_IN', user });
-          else {
-            dispatch({ type: 'SIGN_OUT' });
-            try {
-              netlifyIdentity.logout();
-            } catch {
-              // Safe fallback
-            }
-          }
-        })
-        .catch((error) => console.error('Failed to verify session', error));
-    };
-    const interval = setInterval(verify, 15000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [state.currentUserId]);
-
+  // 8. Actions Dispatcher Setup
   const actions = useMemo<AppActions>(() => {
     const getCurrent = (): User | undefined =>
       stateRef.current.users.find((u) => u?.id === stateRef.current.currentUserId);
@@ -700,6 +690,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           );
         }
       },
+
       unflagPost(postId) {
         dispatch({ type: 'UNFLAG_POST', postId });
         const post = stateRef.current.posts.find((p) => p.id === postId);
@@ -709,6 +700,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           );
         }
       },
+
       deletePost(postId) {
         dispatch({ type: 'DELETE_POST', postId });
         deletePostRemote(postId).catch((err) => console.error('Failed to delete post', err));
@@ -724,6 +716,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           console.error('Failed to save friend request', err);
         }
       },
+
       async acceptFriend(otherId) {
         const me = getCurrent();
         if (!me) return;
@@ -734,6 +727,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           console.error('Failed to accept friend request', err);
         }
       },
+
       async removeFriend(otherId) {
         const me = getCurrent();
         if (!me) return;
@@ -837,6 +831,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (!me) return;
         dispatch({ type: 'JOIN_STREAM', streamId, userId: me.id });
       },
+
       leaveStream(streamId) {
         const me = getCurrent();
         if (!me) return;
@@ -870,6 +865,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         };
         dispatch({ type: 'ADD_ALERT', alert });
       },
+
       dismissAlert(id) {
         dispatch({ type: 'DISMISS_ALERT', id });
       },
