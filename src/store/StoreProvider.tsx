@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react';
-import netlifyIdentity from 'netlify-identity-widget';
 import { type CalendarEvent, type ChatAttachment, type CommunityAlert, type Post, type User } from '../types';
 import {
   StoreContext,
@@ -35,12 +34,6 @@ import {
 import { createNotification } from '../utils/notifications';
 import type { Notification } from '../types';
 import { createGroupRemote, loadGroups } from '../utils/groups';
-import { apiUrl } from '../lib/config';
-import {
-  identityAuthorizationHeaders,
-  persistIdentityCookiesFromLocalStorage,
-  restoreIdentitySession,
-} from '../lib/auth';
 import {
   clearLocalAuthStorage,
   recoverFromUnauthorizedSession,
@@ -61,17 +54,6 @@ const GOOGLE_PHOTOS = [
 const SESSION_RECHECK_INTERVAL_MS = 60_000;
 const AUTH_RESTORE_TIMEOUT_MS = 12_000;
 
-async function loadSessionUser(): Promise<User | null> {
-  const response = await fetch(apiUrl(`/api/session?refresh=${Date.now()}`), {
-    cache: 'no-store',
-    credentials: 'include',
-    headers: identityAuthorizationHeaders(),
-  });
-  if (response.status === 401 || response.status === 403) return null;
-  if (!response.ok) throw new Error('Failed to load the signed-in account');
-  return response.json();
-}
-
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
 
@@ -82,7 +64,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const pendingPostIdsRef = useRef(new Set<string>());
   const postSavePromisesRef = useRef(new Map<string, Promise<boolean>>());
 
-  // 1. Initial Auth Check & Identity
+  // 1. Initial Auth Check & Supabase Auth Listener
   useEffect(() => {
     let active = true;
     let authRestoreFinished = false;
@@ -104,12 +86,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       AUTH_RESTORE_TIMEOUT_MS,
     );
 
-    try {
-      netlifyIdentity.init();
-    } catch {
-      // Fallback
-    }
-
     const resetToSignedOut = () => {
       activeUserIdRef.current = null;
       pendingPostIdsRef.current.clear();
@@ -126,92 +102,58 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       resetToSignedOut();
     };
 
-    const refresh = async () => {
+    const initAuth = async () => {
       try {
-        const sessionCheck = await verifySupabaseSession();
-        if (!active) return;
-        if (sessionCheck.status === 'expired') {
-          await handleExpiredSession('the stored session was rejected while restoring it');
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error || !session?.user) {
+          if (active) dispatch({ type: 'SIGN_OUT' });
           return;
         }
-        if (sessionCheck.status === 'unknown') {
-          console.warn('Could not validate the Supabase session', sessionCheck.error);
-        }
-        const identity = await restoreIdentitySession();
-        const user = identity?.id ? await loadSessionUser() : null;
+
         if (!active) return;
-        if (user) dispatch({ type: 'SIGN_IN', user });
-        else if (!identity) dispatch({ type: 'SIGN_OUT' });
+
+        // Construct User object from Supabase session
+        const sessionUser: User = {
+          id: session.user.id,
+          email: session.user.email || '',
+          name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Member',
+          avatarUrl: session.user.user_metadata?.avatar_url || '',
+          role: 'user',
+          status: 'online',
+          onboarded: true,
+        };
+
+        dispatch({ type: 'SIGN_IN', user: sessionUser });
       } catch (err) {
         console.error('Failed to restore session', err);
       } finally {
         finishAuthRestore();
       }
     };
-    refresh();
 
-    const handleLogout = () => {
-      persistIdentityCookiesFromLocalStorage();
-      if (active) resetToSignedOut();
-    };
+    void initAuth();
 
-    const handleLogin = (user: unknown) => {
-      try {
-        netlifyIdentity.close();
-      } catch {
-        // Fallback
+    // Listen to Supabase Auth State Changes
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!active) return;
+
+      if (event === 'SIGNED_IN' && session?.user) {
+        const sessionUser: User = {
+          id: session.user.id,
+          email: session.user.email || '',
+          name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Member',
+          avatarUrl: session.user.user_metadata?.avatar_url || '',
+          role: 'user',
+          status: 'online',
+          onboarded: true,
+        };
+        dispatch({ type: 'SIGN_IN', user: sessionUser });
+        dispatch({ type: 'AUTH_CHECKED' });
+      } else if (event === 'SIGNED_OUT') {
+        clearLocalAuthStorage();
+        resetToSignedOut();
       }
-      persistIdentityCookiesFromLocalStorage();
-      loadSessionUser()
-        .then((sessionUser) => {
-          if (!active) return;
-          if (sessionUser) {
-            dispatch({ type: 'SIGN_IN', user: sessionUser });
-          } else if (user) {
-            window.location.reload();
-          }
-          dispatch({ type: 'AUTH_CHECKED' });
-        })
-        .catch((err) => {
-          console.error('Failed to sync session', err);
-          window.location.reload();
-        });
-    };
-
-    netlifyIdentity.on('logout', handleLogout);
-    netlifyIdentity.on('login', handleLogin);
-
-    let supabaseAuthListener: ReturnType<typeof supabase.auth.onAuthStateChange>['data'] | null = null;
-    const authListenerSetupTimeoutId = window.setTimeout(
-      () => finishAuthRestore(true),
-      AUTH_RESTORE_TIMEOUT_MS,
-    );
-
-    try {
-      const { data } = supabase.auth.onAuthStateChange((event) => {
-        const authEventTimeoutId = window.setTimeout(
-          () => finishAuthRestore(true),
-          AUTH_RESTORE_TIMEOUT_MS,
-        );
-
-        try {
-          if (!active || event === 'TOKEN_REFRESHED') return;
-          if (event === 'SIGNED_OUT') {
-            clearLocalAuthStorage();
-            resetToSignedOut();
-          }
-        } catch (error) {
-          console.error('Failed to process the Supabase auth state change', error);
-        } finally {
-          window.clearTimeout(authEventTimeoutId);
-        }
-      });
-      supabaseAuthListener = data;
-    } catch (error) {
-      console.error('Failed to subscribe to Supabase auth state changes', error);
-    } finally {
-      window.clearTimeout(authListenerSetupTimeoutId);
-    }
+    });
 
     let lastSessionCheck = Date.now();
     const revalidateSession = async () => {
@@ -231,11 +173,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
       window.clearTimeout(authRestoreTimeoutId);
-      netlifyIdentity.off('logout', handleLogout);
-      netlifyIdentity.off('login', handleLogin);
       document.removeEventListener('visibilitychange', handleForeground);
       window.removeEventListener('focus', handleForeground);
-      supabaseAuthListener?.subscription.unsubscribe();
+      authListener.subscription.unsubscribe();
     };
   }, []);
 
@@ -263,7 +203,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         if (data) {
           const profile = data as Partial<User>;
-          // Destructure clean properties to avoid state mutations
           const { id, email, role, status, ...safeProfile } = profile;
           dispatch({ type: 'HYDRATE_PROFILE', userId, data: safeProfile });
         } else {
@@ -328,7 +267,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [state.currentUserId]);
 
-  // 6. Posts Loading & Race Condition Guard
+  // 6. Posts Loading
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) {
@@ -357,7 +296,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       refreshing = true;
       try {
         const posts = await loadPosts(currentGroupId, { limit: 10 });
-        // Prevent race condition if user switched active group during fetch
         if (!cancelled && activeUserIdRef.current === userId && stateRef.current.activeGroupId === currentGroupId) {
           const cachedPosts = stateRef.current.postsCache[key] ?? [];
           const pendingPosts = stateRef.current.posts.filter(
@@ -483,11 +421,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         clearCachedAppState();
         dispatch({ type: 'SIGN_OUT' });
         void supabase.auth.signOut().catch((err) => console.error('Failed to clear the Supabase session', err));
-        try {
-          netlifyIdentity.logout();
-        } catch (err) {
-          console.error('Failed to sign out via identity', err);
-        }
         clearLocalAuthStorage();
       },
 
