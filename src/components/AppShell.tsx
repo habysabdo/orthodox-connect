@@ -9,7 +9,6 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { hasAdminAccess } from '@/utils/users';
 import { ErrorBoundary } from './ErrorBoundary';
 
-// Route views, sidebars, search, and overlays are fetched only when rendered.
 const FeedView = lazy(() => import('./FeedView').then((m) => ({ default: m.FeedView })));
 const GroupFeedView = lazy(() => import('./GroupFeedView').then((m) => ({ default: m.GroupFeedView })));
 const GroupsView = lazy(() => import('./GroupsView').then((m) => ({ default: m.GroupsView })));
@@ -88,7 +87,7 @@ export function AppShell() {
     <div className="min-h-screen bg-ink-950 text-ink-100">
       {/* Top bar */}
       <header className="sticky top-0 z-30 border-b border-ink-800 bg-ink-950/85 backdrop-blur-md">
-        <div className="mx-auto flex h-14 w-full max-w-[1500px] items-center gap-1.5 px-2 sm:gap-2 sm:px-4">
+        <div className="mx-auto flex h-14 max-w-[1500px] items-center gap-1.5 px-2 sm:gap-2 sm:px-4">
           <button
             onClick={() => setLeftOpen(true)}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-300 transition-colors hover:bg-ink-800 hover:text-gold-200 lg:hidden"
@@ -115,7 +114,7 @@ export function AppShell() {
             )}
           >
             <Suspense fallback={<div className="h-9 w-9 shrink-0 rounded-full bg-ink-850 md:mx-2 md:flex-1 md:max-w-md" />}>
-              <GlobalSearch className="min-w-0 flex-1 md:mx-2 md:max-w-md" />
+              <GlobalSearch className="min-w-0 shrink-0 md:mx-2 md:flex-1 md:max-w-md" />
             </Suspense>
           </ErrorBoundary>
 
@@ -194,7 +193,7 @@ export function AppShell() {
       </header>
 
       {/* Main layout container */}
-      <div className={`mx-auto flex w-full gap-0 px-0 ${view === 'reels' ? 'max-w-none' : 'max-w-[1500px] lg:px-4 lg:py-4'}`}>
+      <div className={`mx-auto flex gap-0 px-0 ${view === 'reels' ? 'max-w-none' : 'max-w-[1500px] lg:px-4 lg:py-4'}`}>
         {/* Left sidebar */}
         <div className={`hidden w-64 shrink-0 lg:block ${view === 'reels' ? 'lg:!hidden' : ''}`}>
           <div className="sticky top-[4.5rem] card !rounded-2xl">
@@ -207,8 +206,8 @@ export function AppShell() {
         </div>
 
         {/* Middle content wrapper */}
-        <main className={`w-full min-w-0 flex-1 ${view === 'reels' ? 'p-0' : 'px-1 py-2 sm:px-4 lg:px-4'}`}>
-          <div className={view === 'reels' || view === 'groups' ? 'mx-auto w-full max-w-5xl' : 'mx-auto w-full max-w-2xl'}>
+        <main className={`min-w-0 flex-1 ${view === 'reels' ? 'p-0' : 'px-1 py-2 sm:px-4 lg:px-4'}`}>
+          <div className={view === 'reels' || view === 'groups' ? 'mx-auto max-w-5xl' : 'mx-auto max-w-2xl'}>
             <ErrorBoundary name="This page" variant="section" resetKeys={[view, groupRouteId, activeGroupId]}>
               <Suspense fallback={<FeedSkeleton />}>
                 {view === 'feed' && (activeGroupId === null ? <FeedView /> : <FeedSkeleton />)}
