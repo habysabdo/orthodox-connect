@@ -1,7 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { StoreProvider } from "./store/StoreProvider";
-import { UIProvider } from "./store/ui"; // 👈 ADDED UI PROVIDER
+import { UIProvider } from "./store/ui";
+import { I18nProvider } from "./i18n";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./components/Login";
 import { AppShell } from "./components/AppShell";
@@ -49,36 +50,38 @@ function LandingRoute() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Root app with router + auth provider + store & UI providers       */
+/*  Root app with all providers wrapped properly                      */
 /* ------------------------------------------------------------------ */
 
 export default function App() {
   return (
-    <AuthProvider>
-      <StoreProvider>
-        <UIProvider> {/* 👈 WRAPPED WITH UI PROVIDER */}
-          <BrowserRouter>
-            <Routes>
-              {/* Public */}
-              <Route path="/" element={<LandingRoute />} />
-              <Route path="/login" element={<LoginRoute />} />
+    <I18nProvider>
+      <AuthProvider>
+        <StoreProvider>
+          <UIProvider>
+            <BrowserRouter>
+              <Routes>
+                {/* Public */}
+                <Route path="/" element={<LandingRoute />} />
+                <Route path="/login" element={<LoginRoute />} />
 
-              {/* Protected App Shell */}
-              <Route
-                path="/feed"
-                element={
-                  <ProtectedRoute>
-                    <AppShell />
-                  </ProtectedRoute>
-                }
-              />
+                {/* Protected App Shell */}
+                <Route
+                  path="/feed"
+                  element={
+                    <ProtectedRoute>
+                      <AppShell />
+                    </ProtectedRoute>
+                  }
+                />
 
-              {/* Fallback */}
-              <Route path="*" element={<Navigate to="/feed" replace />} />
-            </Routes>
-          </BrowserRouter>
-        </UIProvider>
-      </StoreProvider>
-    </AuthProvider>
+                {/* Fallback */}
+                <Route path="*" element={<Navigate to="/feed" replace />} />
+              </Routes>
+            </BrowserRouter>
+          </UIProvider>
+        </StoreProvider>
+      </AuthProvider>
+    </I18nProvider>
   );
 }
