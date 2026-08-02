@@ -20,15 +20,18 @@ import { useStore, unreadCountFor } from '@/store/context';
 import { useUI, type ViewKey } from '@/store/ui';
 import { useTheme, type ThemeMode } from '@/store/theme';
 import { useI18n, type Lang } from '@/store/i18n';
+import { useAuth } from '@/store/auth';
 
 export function LeftSidebar({ onClose }: { onClose?: () => void }) {
   const state = useStore();
-  const { users, currentUserId, signOut } = state;
+  const { users, currentUserId } = state;
   const { view, setView, setGoLiveOpen, setUploadOpen } = useUI();
   const { theme, setTheme } = useTheme();
   const { lang, setLang, t } = useI18n();
+  const { profile, signOut } = useAuth();
   const me = users.find((u) => u.id === currentUserId);
   if (!me) return null;
+  const isAdmin = profile?.role === 'admin';
 
   const unread = unreadCountFor(state, me.id);
 
@@ -39,7 +42,7 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
     { key: 'messenger', label: t('nav.messages'), icon: <MessageCircle size={20} />, badge: unread || undefined },
     { key: 'calendar', label: t('nav.calendar'), icon: <CalendarDays size={20} /> },
     { key: 'profile', label: t('nav.profile'), icon: <UserCircle size={20} /> },
-    ...(me.role === 'admin'
+    ...(isAdmin
       ? [{ key: 'admin' as ViewKey, label: t('nav.admin'), icon: <Shield size={20} /> }]
       : []),
   ];
@@ -189,7 +192,7 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
           </div>
           <div className="truncate text-xs text-ink-400">{me.parish || t('nav.noParish')}</div>
         </div>
-        {me.role === 'admin' && <span className="gold-chip">Admin</span>}
+        {isAdmin && <span className="gold-chip">Admin</span>}
       </button>
 
       <button

@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { Eye, ShieldCheck, Sparkles, Users, Video, Mail, Lock, User as UserIcon } from 'lucide-react';
+import { Eye, ShieldCheck, Sparkles, Users, Video, Mail, Lock, User as UserIcon, Loader2 } from 'lucide-react';
 import { Logo } from './ui';
-import { useStore, pickGooglePhoto } from '@/store/context';
 import { useI18n } from '@/store/i18n';
-import { ADMIN_EMAIL } from '@/types';
+import { useAuth } from '@/store/auth';
 
 export function Landing() {
-  const { signInWithGoogle, signInWithEmail } = useStore();
+  const { signIn, signUp } = useAuth();
   const { t } = useI18n();
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
@@ -15,36 +14,41 @@ export function Landing() {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
 
-  const handleGoogle = async () => {
-    setBusy(true);
-    await new Promise((r) => setTimeout(r, 500));
-    signInWithGoogle({
-      email: 'new.member@example.com',
-      name: 'New Member',
-      photo: pickGooglePhoto('new.member@example.com'),
-    });
-    setBusy(false);
-  };
+  const validateEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
-  const handleEmail = async () => {
+  const handleSubmit = async () => {
     setError('');
     if (!email.trim() || !password.trim()) {
       setError('Please enter your email and password.');
       return;
     }
+    if (!validateEmail(email.trim())) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+    if (mode === 'signup' && !name.trim()) {
+      setError('Please enter your full name.');
+      return;
+    }
+
     setBusy(true);
-    await new Promise((r) => setTimeout(r, 500));
-
-    const isAdmin = email.trim().toLowerCase() === ADMIN_EMAIL;
-    const displayName = mode === 'signup' && name.trim() ? name.trim() : email.split('@')[0];
-
-    signInWithEmail({
-      email: email.trim(),
-      name: displayName,
-      photo: pickGooglePhoto(email),
-      role: isAdmin ? 'admin' : 'member',
-    });
-    setBusy(false);
+    if (mode === 'signin') {
+      const { error: err } = await signIn(email.trim(), password);
+      if (err) {
+        setError(err);
+        setBusy(false);
+      }
+    } else {
+      const { error: err } = await signUp(email.trim(), password, name.trim());
+      if (err) {
+        setError(err);
+        setBusy(false);
+      }
+    }
   };
 
   return (
@@ -110,7 +114,7 @@ export function Landing() {
               {/* Tab switcher */}
               <div className="mt-6 flex gap-1 rounded-xl border border-ink-700 bg-ink-900/50 p-1">
                 <button
-                  onClick={() => setMode('signin')}
+                  onClick={() => { setMode('signin'); setError(''); }}
                   className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-all ${
                     mode === 'signin' ? 'bg-gold-400/15 text-gold-200' : 'text-ink-400 hover:text-ink-200'
                   }`}
@@ -118,7 +122,7 @@ export function Landing() {
                   Sign In
                 </button>
                 <button
-                  onClick={() => setMode('signup')}
+                  onClick={() => { setMode('signup'); setError(''); }}
                   className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-all ${
                     mode === 'signup' ? 'bg-gold-400/15 text-gold-200' : 'text-ink-400 hover:text-ink-200'
                   }`}
@@ -149,7 +153,7 @@ export function Landing() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Email address"
                     className="input pl-10"
-                    onKeyDown={(e) => e.key === 'Enter' && handleEmail()}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
                   />
                 </div>
                 <div className="relative">
@@ -160,34 +164,20 @@ export function Landing() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Password"
                     className="input pl-10"
-                    onKeyDown={(e) => e.key === 'Enter' && handleEmail()}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
                   />
                 </div>
                 {error && <p className="text-xs text-maroon-400">{error}</p>}
                 <button
-                  onClick={handleEmail}
+                  onClick={handleSubmit}
                   disabled={busy}
                   className="gold-btn w-full justify-center px-6 py-3 text-base"
                 >
-                  {busy ? t('landing.connecting') : mode === 'signin' ? 'Sign In' : 'Create Account'}
+                  {busy ? (
+                    <><Loader2 size={18} className="animate-spin" /> {t('landing.connecting')}</>
+                  ) : mode === 'signin' ? 'Sign In' : 'Create Account'}
                 </button>
               </div>
-
-              {/* Divider */}
-              <div className="my-5 flex items-center gap-3">
-                <div className="h-px flex-1 bg-ink-700" />
-                <span className="text-xs text-ink-400">or</span>
-                <div className="h-px flex-1 bg-ink-700" />
-              </div>
-
-              <button
-                onClick={handleGoogle}
-                disabled={busy}
-                className="ghost-btn w-full justify-center px-6 py-3 text-base"
-              >
-                <GoogleIcon />
-                {busy ? t('landing.connecting') : t('landing.continueGoogle')}
-              </button>
 
               <p className="mt-6 text-center text-xs leading-relaxed text-ink-400">
                 {t('landing.byContinue')}{' '}
@@ -218,28 +208,5 @@ function FeaturePill({ icon, label }: { icon: React.ReactNode; label: string }) 
       <span className="text-gold-300">{icon}</span>
       <span className="text-xs font-medium text-ink-300">{label}</span>
     </div>
-  );
-}
-
-function GoogleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5">
-      <path
-        fill="#4285F4"
-        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"
-      />
-    </svg>
   );
 }

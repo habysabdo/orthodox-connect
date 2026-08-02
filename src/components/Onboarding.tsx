@@ -3,9 +3,13 @@ import { Camera, Church, User as UserIcon } from 'lucide-react';
 import { PARISHES } from '../types';
 import { Avatar, Logo } from './ui';
 import { useStore } from '@/store/StoreProvider';
+import { useAuth } from '@/store/auth';
+import { useToast } from './Toast';
 
 export function Onboarding() {
-  const { users, currentUserId, completeOnboarding, signOut } = useStore();
+  const { users, currentUserId } = useStore();
+  const { profile, updateProfile, signOut } = useAuth();
+  const { notify } = useToast();
   const me = users.find((u) => u.id === currentUserId);
 
   const [name, setName] = useState(me?.name ?? '');
@@ -24,12 +28,22 @@ export function Onboarding() {
     reader.readAsDataURL(file);
   };
 
-  const submit = () => {
+  const submit = async () => {
     const ageNum = Number(age);
     if (!name.trim()) return setError('Please enter your full name.');
     if (!ageNum || ageNum < 13 || ageNum > 120) return setError('Please enter a valid age (13–120).');
     if (!parish.trim()) return setError('Please enter your church parish.');
-    completeOnboarding({ name: name.trim(), age: ageNum, photo: photo || me.photo, parish });
+    const { error } = await updateProfile({
+      display_name: name.trim(),
+      parish: parish.trim(),
+      photo_url: photo || me?.photo || '',
+      onboarded: true,
+    });
+    if (error) {
+      notify('error', `Failed to save: ${error}`);
+    } else {
+      notify('success', 'Profile created! Welcome to OrthodoxConnect.');
+    }
   };
 
   return (

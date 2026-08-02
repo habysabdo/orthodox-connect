@@ -1,4 +1,4 @@
-import { Menu, MessageCircle, Radio, Users, Languages } from 'lucide-react';
+import { Menu, MessageCircle, Radio, Users, Languages, ShieldCheck } from 'lucide-react';
 import { Avatar, Logo } from './ui';
 import { LeftSidebar } from './LeftSidebar';
 import { RightSidebar } from './RightSidebar';
@@ -16,14 +16,17 @@ import { VideoCallModal } from './VideoCallModal';
 import { useStore } from '@/store/context';
 import { useUI } from '@/store/ui';
 import { useI18n } from '@/store/i18n';
+import { useAuth } from '@/store/auth';
 import { useState } from 'react';
 
 export function AppShell() {
   const { users, currentUserId } = useStore();
+  const { profile } = useAuth();
   const { view, setView, setGoLiveOpen, rightOpen, setRightOpen, uploadOpen, setUploadOpen, callPeerId, setCallPeerId, callGroupLabel } = useUI();
   const { lang, setLang } = useI18n();
   const me = users.find((u) => u.id === currentUserId);
   const [leftOpen, setLeftOpen] = useState(false);
+  const isAdmin = profile?.role === 'admin';
 
   if (!me) return null;
 
@@ -92,8 +95,13 @@ export function AppShell() {
             <MessageCircle size={20} />
           </button>
 
-          <button onClick={() => setView('profile')} className="ml-1">
+          <button onClick={() => setView('profile')} className="ml-1 flex items-center gap-2">
             <Avatar src={me.photo} name={me.name} size={34} ring="gold" online />
+            {isAdmin && (
+              <span className="hidden items-center gap-1 rounded-full bg-gold-400/15 px-2 py-1 text-[10px] font-bold text-gold-200 sm:flex">
+                <ShieldCheck size={11} /> Admin
+              </span>
+            )}
           </button>
         </div>
       </header>

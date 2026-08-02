@@ -1,10 +1,12 @@
-import { CalendarDays, Church, Edit3, Mail, Phone, Users, Video, Grid3x3, Bookmark, Heart } from 'lucide-react';
+import { CalendarDays, Church, Edit3, Mail, Phone, Users, Video, Grid3x3, Bookmark, Heart, Lock, Loader2, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Avatar, Modal } from './ui';
 import { useStore } from '@/store/context';
 import { useUI } from '@/store/ui';
 import { useI18n } from '@/store/i18n';
+import { useAuth } from '@/store/auth';
+import { useToast } from './Toast';
 import { timeAgo } from '@/utils/format';
 import { PARISHES } from '@/types';
 import { PostCard } from './PostCard';
@@ -16,12 +18,17 @@ export function ProfileView() {
   const state = useStore();
   const { setView, setOpenThreadId, setCallPeerId, setCallGroupLabel } = useUI();
   const { t } = useI18n();
+  const { profile, updateProfile, updatePassword } = useAuth();
+  const { notify } = useToast();
   const me = state.users.find((u) => u.id === state.currentUserId);
+
   const [editOpen, setEditOpen] = useState(false);
-  const [name, setName] = useState(me?.name ?? '');
-  const [bio, setBio] = useState(me?.bio ?? '');
-  const [parish, setParish] = useState(me?.parish ?? '');
-  const [photo, setPhoto] = useState(me?.photo ?? '');
+  const [name, setName] = useState(profile?.display_name ?? me?.name ?? '');
+  const [bio, setBio] = useState(profile?.bio ?? me?.bio ?? '');
+  const [parish, setParish] = useState(profile?.parish ?? me?.parish ?? '');
+  const [photo, setPhoto] = useState(profile?.photo_url ?? me?.photo ?? '');
+  const [newPassword, setNewPassword] = useState('');
+  const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<Tab>('posts');
   const [lightbox, setLightbox] = useState<Post | null>(null);
 
@@ -31,9 +38,38 @@ export function ProfileView() {
   const savedPosts = myPosts.filter((p) => p.bookmarks?.includes(me.id));
   const likedPosts = myPosts.filter((p) => p.likes.includes(me.id));
 
-  const save = () => {
-    state.completeOnboarding({ name: name.trim() || me.name, age: me.age, photo, parish });
-    setEditOpen(false);
+  const save = async () => {
+    setSaving(true);
+    const { error } = await updateProfile({
+      display_name: name.trim() || me.name,
+      bio: bio.trim(),
+      parish: parish.trim(),
+      photo_url: photo,
+      onboarded: true,
+    });
+    setSaving(false);
+    if (error) {
+      notify('error', `Failed to save: ${error}`);
+    } else {
+      notify('success', 'Profile updated successfully.');
+      setEditOpen(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (newPassword.length < 6) {
+      notify('error', 'Password must be at least 6 characters.');
+      return;
+    }
+    setSaving(true);
+    const { error } = await updatePassword(newPassword);
+    setSaving(false);
+    if (error) {
+      notify('error', `Password change failed: ${error}`);
+    } else {
+      notify('success', 'Password changed successfully.');
+      setNewPassword('');
+    }
   };
 
   const onPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,6 +83,7 @@ export function ProfileView() {
   const tabPosts = tab === 'posts' ? myPosts : tab === 'saved' ? savedPosts : likedPosts;
   const followerCount = me.followers.length;
   const followingCount = me.following.length;
+  const isAdmin = profile?.role === 'admin';
 
   return (
     <div className="space-y-4">
@@ -57,7 +94,7 @@ export function ProfileView() {
         </div>
         <div className="px-4 pb-4">
           <div className="-mt-12 flex items-end justify-between">
-            <Avatar src={me.photo} name={me.name} size={96} ring="gold" />
+            <Avatar src={photo || me.photo} name={name || me.name} size={96} ring="gold" />
             <div className="flex gap-2">
               <button
                 onClick={() => { setCallPeerId(me.id); setCallGroupLabel(`Call with ${me.name}`); }}
@@ -74,22 +111,22 @@ export function ProfileView() {
                 <Video size={14} />
               </button>
               <button onClick={() => setEditOpen(true)} className="ghost-btn py-2 text-xs">
-                <Edit3 size={13} /> Edit profile
+                <Edit3 size={13} /> {t('profile.edit')}
               </button>
             </div>
           </div>
           <div className="mt-3">
             <div className="flex items-center gap-2">
-              <h1 className="font-serif text-2xl font-semibold">{me.name}</h1>
-              {me.role === 'admin' && <span className="gold-chip">Admin / Owner</span>}
+              <h1 className="font-serif text-2xl font-semibold">{profile?.display_name || me.name}</h1>
+              {isAdmin && <span className="gold-chip"><ShieldCheck size={12} className="inline" /> Admin</span>}
+              {profile?.verified && <span className="chip py-0 text-emerald-300">Verified</span>}
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-ink-400">
-              <span className="flex items-center gap-1"><Church size={12} /> {me.parish || t('nav.noParish')}</span>
-              <span className="flex items-center gap-1"><Mail size={12} /> {me.email}</span>
-              <span>Age {me.age}</span>
+              <span className="flex items-center gap-1"><Church size={12} /> {profile?.parish || me.parish || t('nav.noParish')}</span>
+              <span className="flex items-center gap-1"><Mail size={12} /> {profile?.email || me.email}</span>
               <span>Joined {timeAgo(me.joinedAt)} ago</span>
             </div>
-            {me.bio && <p className="mt-3 text-sm text-ink-200">{me.bio}</p>}
+            {(profile?.bio || me.bio) && <p className="mt-3 text-sm text-ink-200">{profile?.bio || me.bio}</p>}
 
             {/* Follow stats */}
             <div className="mt-3 flex gap-5">
@@ -152,7 +189,6 @@ export function ProfileView() {
                   <span className="line-clamp-4 text-[10px] text-ink-400">{p.text}</span>
                 </div>
               )}
-              {/* Overlay on hover */}
               <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
                 <div className="flex gap-3 text-white">
                   <span className="flex items-center gap-1 text-xs">
@@ -225,10 +261,35 @@ export function ProfileView() {
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-ink-400">{t('profile.bio')}</label>
               <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} className="input resize-none" placeholder={t('profile.bioPlaceholder')} />
             </div>
+
+            {/* Password change section */}
+            <div className="rounded-xl border border-ink-700 bg-ink-900/50 p-3">
+              <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink-400">
+                <Lock size={12} /> Change Password
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="New password (min 6 chars)"
+                  className="input flex-1"
+                />
+                <button
+                  onClick={handleChangePassword}
+                  disabled={saving || newPassword.length < 6}
+                  className="ghost-btn px-4 py-2 text-xs whitespace-nowrap"
+                >
+                  Update
+                </button>
+              </div>
+            </div>
           </div>
           <div className="mt-5 flex justify-end gap-2">
             <button onClick={() => setEditOpen(false)} className="ghost-btn py-2">{t('common.cancel')}</button>
-            <button onClick={save} className="gold-btn py-2">{t('common.save')}</button>
+            <button onClick={save} disabled={saving} className="gold-btn py-2">
+              {saving ? <Loader2 size={16} className="animate-spin" /> : t('common.save')}
+            </button>
           </div>
         </div>
       </Modal>
