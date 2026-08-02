@@ -82,7 +82,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const pendingPostIdsRef = useRef(new Set<string>());
   const postSavePromisesRef = useRef(new Map<string, Promise<boolean>>());
 
-  // 1. Initial Auth Restore Effect
+  // 1. Initial Auth Check & Identity
   useEffect(() => {
     let active = true;
     let authRestoreFinished = false;
@@ -107,7 +107,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       netlifyIdentity.init();
     } catch {
-      // Safe fallback
+      // Fallback
     }
 
     const resetToSignedOut = () => {
@@ -159,7 +159,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       try {
         netlifyIdentity.close();
       } catch {
-        // Safe fallback
+        // Fallback
       }
       persistIdentityCookiesFromLocalStorage();
       loadSessionUser()
@@ -239,7 +239,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // 2. Local State Caching
+  // 2. Local Caching
   useEffect(() => {
     const user = state.users.find((candidate) => candidate?.id === state.currentUserId);
     if (!user) {
@@ -253,7 +253,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, [state.authChecked, state.currentUserId, state.postsCache, state.postsHasMoreCache, state.users]);
 
-  // 3. User Profile Hydration
+  // 3. User Profile
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -263,11 +263,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         if (data) {
           const profile = data as Partial<User>;
-          const safeProfile = { ...profile };
-          delete safeProfile.id;
-          delete safeProfile.email;
-          delete safeProfile.role;
-          delete safeProfile.status;
+          // Destructure clean properties to avoid state mutations
+          const { id, email, role, status, ...safeProfile } = profile;
           dispatch({ type: 'HYDRATE_PROFILE', userId, data: safeProfile });
         } else {
           const me = stateRef.current.users.find((u) => u?.id === userId);
@@ -284,7 +281,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [state.currentUserId]);
 
-  // 4. Groups Hydration
+  // 4. Groups
   useEffect(() => {
     if (!state.currentUserId) return;
     loadGroups()
@@ -292,7 +289,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .catch((err) => console.error('Failed to load groups', err));
   }, [state.currentUserId]);
 
-  // 5. Users & Friendships Polling
+  // 5. Polling Users & Friendships
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -331,11 +328,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [state.currentUserId]);
 
-  // 6. Posts Hydration & Fetching (FIXED UNAUTHENTICATED GATE)
+  // 6. Posts Loading & Race Condition Guard
   useEffect(() => {
     const userId = state.currentUserId;
-    
-    // 🎯 FIX: Release posts loading immediately if no user is signed in
     if (!userId) {
       dispatch({ type: 'SET_POSTS_LOADING', loading: false });
       return;
@@ -343,7 +338,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     let cancelled = false;
     let refreshing = false;
-    const key = groupCacheKey(state.activeGroupId);
+    const currentGroupId = state.activeGroupId;
+    const key = groupCacheKey(currentGroupId);
     const cached = stateRef.current.postsCache[key];
 
     if (cached) {
@@ -360,8 +356,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (refreshing) return;
       refreshing = true;
       try {
-        const posts = await loadPosts(state.activeGroupId, { limit: 10 });
-        if (!cancelled && activeUserIdRef.current === userId) {
+        const posts = await loadPosts(currentGroupId, { limit: 10 });
+        // Prevent race condition if user switched active group during fetch
+        if (!cancelled && activeUserIdRef.current === userId && stateRef.current.activeGroupId === currentGroupId) {
           const cachedPosts = stateRef.current.postsCache[key] ?? [];
           const pendingPosts = stateRef.current.posts.filter(
             (post) => pendingPostIdsRef.current.has(post.id) && groupCacheKey(post.groupId) === key,
@@ -388,7 +385,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         console.error('Failed to load posts', err);
       } finally {
-        if (!cancelled && activeUserIdRef.current === userId) {
+        if (!cancelled && activeUserIdRef.current === userId && stateRef.current.activeGroupId === currentGroupId) {
           dispatch({ type: 'SET_POSTS_LOADING', loading: false });
         }
         refreshing = false;
@@ -412,7 +409,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [state.currentUserId, state.activeGroupId]);
 
-  // 7. Messaging Threads
+  // 7. Messages
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -451,7 +448,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [state.currentUserId]);
 
-  // 8. Actions Dispatcher Setup
+  // 8. Actions
   const actions = useMemo<AppActions>(() => {
     const getCurrent = (): User | undefined =>
       stateRef.current.users.find((u) => u?.id === stateRef.current.currentUserId);
