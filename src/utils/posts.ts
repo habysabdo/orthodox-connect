@@ -44,6 +44,32 @@ export async function loadPosts(
   }
 }
 
+export async function loadPostsByAuthor(authorId: string): Promise<Post[]> {
+  try {
+    const { data, error } = await supabase
+      .from('posts')
+      .select('*')
+      .eq('author_id', authorId)
+      .order('created_at', { ascending: false });
+
+    if (error || !data) return [];
+
+    return data.map((row: any) => ({
+      id: row.id,
+      authorId: row.author_id,
+      text: row.text || '',
+      image: row.image || undefined,
+      video: row.video || undefined,
+      createdAt: new Date(row.created_at).getTime(),
+      likes: row.likes || [],
+      comments: row.comments || [],
+      groupId: row.group_id || null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function savePost(post: Post): Promise<boolean> {
   try {
     const { error } = await supabase.from('posts').upsert({
