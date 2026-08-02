@@ -28,6 +28,7 @@ export interface Comment {
 export interface Post {
   id: string;
   authorId: string;
+  authorName?: string;
   text: string;
   image?: string;
   createdAt: number;

@@ -3,6 +3,7 @@ import { Avatar, Logo } from './ui';
 import { LeftSidebar } from './LeftSidebar';
 import { RightSidebar } from './RightSidebar';
 import { FeedView } from './FeedView';
+import { ReelsView } from './ReelsView';
 import { NetworkView } from './NetworkView';
 import { MessengerView } from './MessengerView';
 import { CalendarView } from './CalendarView';
@@ -96,6 +97,7 @@ export function AppShell() {
         <main className="min-w-0 flex-1 px-3 py-4 sm:px-4 lg:px-4">
           <div className="mx-auto max-w-2xl">
             {view === 'feed' && <FeedView />}
+            {view === 'reels' && <ReelsView />}
             {view === 'network' && <NetworkView />}
             {view === 'messenger' && <MessengerView />}
             {view === 'calendar' && <CalendarView />}

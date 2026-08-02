@@ -1,5 +1,6 @@
 import {
   CalendarDays,
+  Clapperboard,
   Home,
   LogOut,
   Radio,
@@ -24,6 +25,7 @@ export function LeftSidebar({ onClose }: { onClose?: () => void }) {
 
   const nav: { key: ViewKey; label: string; icon: React.ReactNode; badge?: number }[] = [
     { key: 'feed', label: 'Home Feed', icon: <Home size={20} /> },
+    { key: 'reels', label: 'Reels', icon: <Clapperboard size={20} /> },
     { key: 'network', label: 'My Network', icon: <Users size={20} /> },
     { key: 'messenger', label: 'Messages', icon: <MessageCircle size={20} />, badge: unread || undefined },
     { key: 'calendar', label: 'Calendar', icon: <CalendarDays size={20} /> },

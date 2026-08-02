@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 
-export type ViewKey = 'feed' | 'network' | 'messenger' | 'calendar' | 'admin' | 'profile';
+export type ViewKey = 'feed' | 'reels' | 'network' | 'messenger' | 'calendar' | 'admin' | 'profile';
 
 interface UIState {
   view: ViewKey;
