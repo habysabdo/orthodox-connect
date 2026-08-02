@@ -6,15 +6,16 @@ import { bunnyEmbedUrl, bunnyHlsUrl } from './bunny';
  * - `mux`     → a Mux-hosted stream, played with <MuxPlayer> (adaptive HLS,
  *               works on every device including iOS Safari).
  * - `direct`  → a direct file or Bunny adaptive HLS stream played in an HTML5 <video> element.
- * - `embed`   → a known platform (YouTube/Facebook/Vimeo) rendered in a provider iframe.
- * - `iframe`  → any other external link, rendered in a generic iframe.
+ * - `embed`   → a known platform (YouTube/Vimeo/Facebook) rendered in a provider iframe.
+ * - `iframe`  → any other external link, resolved into a preview card.
  * - `invalid` → the value is not a usable URL; callers should show the fallback link.
  */
 export type VideoSource =
   | { kind: 'mux'; playbackId: string; originalUrl: string }
   | { kind: 'direct'; url: string; mimeType: string }
   | { kind: 'embed'; provider: 'youtube'; videoId: string; embedUrl: string; originalUrl: string }
-  | { kind: 'embed'; provider: 'facebook' | 'vimeo'; embedUrl: string; originalUrl: string }
+  | { kind: 'embed'; provider: 'vimeo'; embedUrl: string; originalUrl: string }
+  | { kind: 'embed'; provider: 'facebook'; embedUrl: string; originalUrl: string }
   | { kind: 'hosted-iframe'; embedUrl: string; originalUrl: string }
   | { kind: 'iframe'; embedUrl: string; originalUrl: string }
   | { kind: 'invalid'; originalUrl: string };
@@ -81,19 +82,44 @@ function directVideoExtension(url: URL): string | null {
   return DIRECT_VIDEO_EXTENSIONS.includes(extension) ? extension : null;
 }
 
-function youTubeId(url: URL): string | null {
+const YOUTUBE_VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
+
+/**
+ * Reduce a raw path segment or `v=` value to the bare 11-character video id.
+ * Share links carry trailing junk (`abc123XYZ_1?si=…`, `abc123XYZ_1&t=30`) that
+ * would otherwise fail the strict length check.
+ */
+function normalizeYouTubeId(candidate: string | null | undefined): string | null {
+  if (!candidate) return null;
+  const bare = candidate.split(/[?&#]/)[0].slice(0, 11);
+  return YOUTUBE_VIDEO_ID_PATTERN.test(bare) ? bare : null;
+}
+
+export function extractYouTubeVideoId(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  const url = normalizeUrl(raw);
+  if (!url) return null;
+
   const host = url.hostname.replace(/^www\./, '');
+  let candidate: string | null = null;
+
   if (host === 'youtu.be') {
-    const id = url.pathname.split('/').filter(Boolean)[0];
-    return id || null;
+    candidate = url.pathname.split('/').filter(Boolean)[0] ?? null;
   }
-  if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'youtube-nocookie.com') {
-    if (url.pathname === '/watch') return url.searchParams.get('v');
+
+  if (
+    host === 'youtube.com' ||
+    host === 'm.youtube.com' ||
+    host === 'music.youtube.com' ||
+    host === 'youtube-nocookie.com'
+  ) {
+    if (url.pathname === '/watch') candidate = url.searchParams.get('v');
     const segments = url.pathname.split('/').filter(Boolean);
     // /embed/ID, /shorts/ID, /v/ID, /live/ID
-    if (['embed', 'shorts', 'v', 'live'].includes(segments[0])) return segments[1] || null;
+    if (['embed', 'shorts', 'v', 'live'].includes(segments[0])) candidate = segments[1] ?? null;
   }
-  return null;
+
+  return normalizeYouTubeId(candidate);
 }
 
 function vimeoId(url: URL): string | null {
@@ -111,22 +137,6 @@ function isFacebook(url: URL): boolean {
   return host === 'facebook.com' || host === 'm.facebook.com' || host === 'fb.watch' || host === 'fb.com';
 }
 
-function cleanFacebookVideoUrl(url: URL): URL {
-  const cleaned = new URL(url.toString());
-  const host = cleaned.hostname.replace(/^www\./, '');
-
-  if (host === 'facebook.com' || host === 'm.facebook.com' || host === 'fb.com') {
-    cleaned.protocol = 'https:';
-    cleaned.hostname = 'www.facebook.com';
-  }
-
-  for (const parameter of [...cleaned.searchParams.keys()]) {
-    if (!['v', 'story_fbid', 'id'].includes(parameter)) cleaned.searchParams.delete(parameter);
-  }
-  cleaned.hash = '';
-  return cleaned;
-}
-
 function isFacebookVideoUrl(url: URL): boolean {
   if (!isFacebook(url)) return false;
 
@@ -138,8 +148,13 @@ function isFacebookVideoUrl(url: URL): boolean {
     (/^\/watch\/?$/.test(pathname) && url.searchParams.has('v')) ||
     pathname === '/video.php' ||
     /\/(?:videos?|reels?)(?:\/|$)/.test(pathname) ||
-    /\/share\/v(?:\/|$)/.test(pathname)
+    /\/share\/(?:v|r)(?:\/|$)/.test(pathname)
   );
+}
+
+/** Builds the Facebook video plugin URL used to embed a post inline. */
+export function facebookEmbedUrl(videoUrl: string): string {
+  return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(videoUrl)}&show_text=false&width=560`;
 }
 
 const TEXT_URL_PATTERN = /(?:https?:\/\/|www\.|(?:youtube\.com|youtu\.be|facebook\.com|fb\.watch|fb\.com)\/)[^\s<>]+/gi;
@@ -186,7 +201,7 @@ export function extractEmbeddedVideoUrl(text: string | undefined | null): string
     const url = normalizeUrl(part.href);
     if (!url) continue;
 
-    if (youTubeId(url) || isFacebookVideoUrl(url)) return url.toString();
+    if (extractYouTubeVideoId(url.toString()) || isFacebookVideoUrl(url)) return url.toString();
   }
 
   return null;
@@ -265,16 +280,13 @@ export function parseVideoSource(raw: string | undefined | null): VideoSource {
     };
   }
 
-  const yt = youTubeId(url);
+  const yt = extractYouTubeVideoId(original);
   if (yt) {
-    const origin = typeof window !== 'undefined' ? window.location?.origin : '';
-    const query = new URLSearchParams({ playsinline: '1', rel: '0', enablejsapi: '1' });
-    if (origin) query.set('origin', origin);
     return {
       kind: 'embed',
       provider: 'youtube',
       videoId: yt,
-      embedUrl: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(yt)}?${query.toString()}`,
+      embedUrl: `https://www.youtube-nocookie.com/embed/${yt}`,
       originalUrl: url.toString(),
     };
   }
@@ -290,19 +302,11 @@ export function parseVideoSource(raw: string | undefined | null): VideoSource {
   }
 
   if (isFacebookVideoUrl(url)) {
-    const facebookUrl = cleanFacebookVideoUrl(url);
-    const query = new URLSearchParams({
-      href: facebookUrl.toString(),
-      show_text: 'false',
-      width: '1280',
-      allowfullscreen: 'true',
-      autoplay: 'false',
-    });
     return {
       kind: 'embed',
       provider: 'facebook',
-      embedUrl: `https://www.facebook.com/plugins/video.php?${query.toString()}`,
-      originalUrl: facebookUrl.toString(),
+      embedUrl: facebookEmbedUrl(url.toString()),
+      originalUrl: url.toString(),
     };
   }
 

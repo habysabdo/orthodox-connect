@@ -1,58 +1,120 @@
-import { lazy, Suspense } from 'react';
-import { StoreProvider, useStore } from './store/StoreProvider';
-import { UIProvider } from './store/ui';
-import { NotificationsProvider } from './store/notifications';
-import { I18nProvider } from './i18n';
-import { LoadingScreen } from './components/ui';
-import { ErrorBoundary } from './components/ErrorBoundary';
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+import { Login } from "./components/Login";
+import { NotificationPrompt } from "./components/NotificationPrompt";
+import { PostCard, type Post } from "./components/PostCard";
 
-const Landing = lazy(() => import('./components/Landing').then((module) => ({ default: module.Landing })));
-const AppShell = lazy(() => import('./components/AppShell').then((module) => ({ default: module.AppShell })));
+/**
+ * App
+ *
+ * Sets up routing with auth-gated routes. Unauthenticated users are
+ * redirected to /login. Authenticated users are redirected away from
+ * /login to /feed.
+ *
+ * All auth goes through Supabase — no Netlify Identity anywhere.
+ */
 
-function Gate() {
-  const { users, currentUserId, authChecked } = useStore();
+/* ------------------------------------------------------------------ */
+/*  Example feed page (replace with your real component)               */
+/* ------------------------------------------------------------------ */
 
-  // Wait for the persisted authentication session to be restored before deciding what
-  // to render. Without this, the gate would fall through to <Landing /> on the
-  // first paint and flash the login page to already-signed-in users — the bug
-  // this addresses, most visible on mobile where session restore is slower.
-  if (!authChecked) {
-    return <LoadingScreen label="Signing you in…" />;
-  }
+const SAMPLE_POSTS: Post[] = [
+  {
+    id: "1",
+    author: { name: "Fr. John", avatar_url: undefined },
+    content: "Welcome to Orthodox Connect! 🕊️",
+    created_at: new Date().toISOString(),
+    media_type: null,
+  },
+];
 
-  const safeUsers = Array.isArray(users) ? users : [];
-  const me = currentUserId ? safeUsers.find((user) => user?.id === currentUserId) : undefined;
+function Feed() {
+  const { user, signOut } = useAuth();
 
-  if (!me) {
-    console.log('[Gate] No current user → Landing');
-    return (
-      <ErrorBoundary name="Sign in" variant="section" resetKeys={[currentUserId]}>
-        <Suspense fallback={<LoadingScreen label="Loading sign in…" />}>
-          <Landing />
-        </Suspense>
-      </ErrorBoundary>
-    );
-  }
-  console.log('[Gate] User ready → AppShell', me.email);
   return (
-    <ErrorBoundary name="Community" resetKeys={[currentUserId]}>
-      <Suspense fallback={<LoadingScreen label="Loading your community…" />}>
-        <AppShell />
-      </Suspense>
-    </ErrorBoundary>
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900">
+      <NotificationPrompt />
+
+      <header className="sticky top-0 z-40 border-b border-neutral-200 bg-white/80 backdrop-blur dark:border-neutral-700 dark:bg-neutral-800/80">
+        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
+          <h1 className="text-lg font-bold text-neutral-900 dark:text-neutral-100">
+            Orthodox Connect
+          </h1>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-neutral-500">
+              {user?.email}
+            </span>
+            <button
+              type="button"
+              onClick={signOut}
+              className="text-sm font-semibold text-blue-600 hover:underline"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-2xl space-y-4 px-4 py-6">
+        {SAMPLE_POSTS.map((post) => (
+          <PostCard key={post.id} post={post} />
+        ))}
+      </main>
+    </div>
   );
 }
 
+/* ------------------------------------------------------------------ */
+/*  Login route — redirects to /feed if already authenticated           */
+/* ------------------------------------------------------------------ */
+
+function LoginRoute() {
+  const { session, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-neutral-50 dark:bg-neutral-900">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-300 border-t-blue-600" />
+      </div>
+    );
+  }
+
+  // Already logged in → go to feed
+  if (session) return <Navigate to="/feed" replace />;
+
+  return <Login />;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Root app with router + auth provider                                */
+/* ------------------------------------------------------------------ */
+
 export default function App() {
   return (
-    <I18nProvider>
-      <StoreProvider>
-        <UIProvider>
-          <NotificationsProvider>
-            <Gate />
-          </NotificationsProvider>
-        </UIProvider>
-      </StoreProvider>
-    </I18nProvider>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Public */}
+          <Route path="/login" element={<LoginRoute />} />
+
+          {/* Protected */}
+          <Route
+            path="/feed"
+            element={
+              <ProtectedRoute>
+                <Feed />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Default redirect */}
+          <Route path="/" element={<Navigate to="/feed" replace />} />
+
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/feed" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }

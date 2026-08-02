@@ -1,11 +1,9 @@
-import {
-  getUser,
-  handleAuthCallback,
-  type User as IdentityUser,
-} from '@netlify/identity';
+import netlifyIdentity from 'netlify-identity-widget';
 
 const IDENTITY_STORAGE_KEY = 'gotrue.user';
 const PERSISTENT_COOKIE_MAX_AGE = 60 * 60 * 24 * 400;
+
+export type IdentityUser = ReturnType<typeof netlifyIdentity.currentUser>;
 
 type StoredIdentitySession = {
   token?: {
@@ -52,14 +50,18 @@ export function identityAuthorizationHeaders(): Record<string, string> {
 }
 
 export async function restoreIdentitySession(): Promise<IdentityUser | null> {
-  await handleAuthCallback();
+  try {
+    netlifyIdentity.init();
+  } catch {
+    // Safe fallback if initialized already
+  }
 
   // Netlify Identity persists its browser session in localStorage, but its
   // companion cookies are session cookies. Recreate those cookies first so
-  // getUser() does not discard a valid saved session after a browser restart.
+  // currentUser() does not discard a valid saved session after a browser restart.
   persistIdentityCookiesFromLocalStorage();
 
-  const user = await getUser();
+  const user = netlifyIdentity.currentUser();
   if (!user) return null;
 
   persistIdentityCookiesFromLocalStorage();

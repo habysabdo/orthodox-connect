@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react';
-import { AUTH_EVENTS, logout, onAuthChange } from '@netlify/identity';
+import netlifyIdentity from 'netlify-identity-widget';
 import { type CalendarEvent, type ChatAttachment, type CommunityAlert, type Post, type User } from '../types';
 import {
   StoreContext,
@@ -36,7 +36,16 @@ import { createNotification } from '../utils/notifications';
 import type { Notification } from '../types';
 import { createGroupRemote, loadGroups } from '../utils/groups';
 import { apiUrl } from '../lib/config';
-import { persistIdentityCookiesFromLocalStorage, restoreIdentitySession } from '../lib/auth';
+import {
+  identityAuthorizationHeaders,
+  persistIdentityCookiesFromLocalStorage,
+  restoreIdentitySession,
+} from '../lib/auth';
+import {
+  clearLocalAuthStorage,
+  recoverFromUnauthorizedSession,
+  verifySupabaseSession,
+} from '../lib/sessionRecovery';
 import { clearCachedAppState, saveCachedAppState } from './persistence';
 import { postComments, postLikes, userName } from '../utils/postSafety';
 import { supabase } from '../lib/supabase';
@@ -49,8 +58,18 @@ const GOOGLE_PHOTOS = [
   'https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg',
 ];
 
+// The session is only re-verified this often while the app is being brought back
+// to the foreground, so switching between tabs cannot turn into a stream of
+// requests to the auth endpoint.
+const SESSION_RECHECK_INTERVAL_MS = 60_000;
+const AUTH_RESTORE_TIMEOUT_MS = 12_000;
+
 async function loadSessionUser(): Promise<User | null> {
-  const response = await fetch(apiUrl(`/api/session?refresh=${Date.now()}`), { cache: 'no-store' });
+  const response = await fetch(apiUrl(`/api/session?refresh=${Date.now()}`), {
+    cache: 'no-store',
+    credentials: 'include',
+    headers: identityAuthorizationHeaders(),
+  });
   if (response.status === 401 || response.status === 403) return null;
   if (!response.ok) throw new Error('Failed to load the signed-in account');
   return response.json();
@@ -60,8 +79,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
 
   // Keep a live ref so action callbacks always read the freshest state,
-  // regardless of how the actions memo is memoized. This prevents stale
-  // closures that caused the post-login blank screen.
+  // regardless of how the actions memo is memoized.
   const stateRef = useRef(state);
   stateRef.current = state;
   const activeUserIdRef = useRef(state.currentUserId);
@@ -71,11 +89,69 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
+    let authRestoreFinished = false;
+
+    const finishAuthRestore = (timedOut = false) => {
+      if (!active || authRestoreFinished) return;
+      authRestoreFinished = true;
+      window.clearTimeout(authRestoreTimeoutId);
+      if (timedOut) {
+        console.error(
+          `Authentication restore exceeded ${AUTH_RESTORE_TIMEOUT_MS}ms; releasing the loading screen.`,
+        );
+      }
+      dispatch({ type: 'AUTH_CHECKED' });
+    };
+
+    const authRestoreTimeoutId = window.setTimeout(
+      () => finishAuthRestore(true),
+      AUTH_RESTORE_TIMEOUT_MS,
+    );
+
+    // Initialize netlifyIdentity widget if not initialized
+    try {
+      netlifyIdentity.init();
+    } catch {
+      // Safe fallback if already initialized or running in strict SSR
+    }
+
+    // Everything a signed-out browser has to forget, in one place. The three
+    // ways a session can end — the member logging out, Supabase reporting
+    // SIGNED_OUT, and a refresh coming back 401 — all have to leave the same
+    // clean state behind, or the next login inherits the leftovers.
+    const resetToSignedOut = () => {
+      activeUserIdRef.current = null;
+      pendingPostIdsRef.current.clear();
+      postSavePromisesRef.current.clear();
+      clearCachedAppState();
+      dispatch({ type: 'SIGN_OUT' });
+      dispatch({ type: 'AUTH_CHECKED' });
+      if (window.location.pathname !== '/login') window.location.replace('/login');
+    };
+
+    // A session whose refresh was rejected can never repair itself, so sign it
+    // out and wipe the stored keys instead of leaving a dead token in place to
+    // fail the same way on every later request. What the member sees is the
+    // normal login form, ready for a clean sign in.
+    const handleExpiredSession = async (reason: string) => {
+      await recoverFromUnauthorizedSession(reason);
+      if (!active) return;
+      resetToSignedOut();
+    };
+
     const refresh = async () => {
       try {
-        const { error: supabaseSessionError } = await supabase.auth.getSession();
-        if (supabaseSessionError) {
-          console.warn('Failed to validate the Supabase session', supabaseSessionError);
+        const sessionCheck = await verifySupabaseSession();
+        if (!active) return;
+        if (sessionCheck.status === 'expired') {
+          await handleExpiredSession('the stored session was rejected while restoring it');
+          return;
+        }
+        if (sessionCheck.status === 'unknown') {
+          // Offline, or the auth endpoint is failing: the token itself may well
+          // be fine, so keep the session and let the automatic background
+          // refresh try again rather than signing anybody out over a bad network.
+          console.warn('Could not validate the Supabase session', sessionCheck.error);
         }
         const identity = await restoreIdentitySession();
         const user = identity?.id ? await loadSessionUser() : null;
@@ -86,52 +162,108 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         console.error('Failed to restore session', err);
       } finally {
-        if (active) dispatch({ type: 'AUTH_CHECKED' });
+        finishAuthRestore();
       }
     };
     refresh();
-    const unsubscribe = onAuthChange((event) => {
-      persistIdentityCookiesFromLocalStorage();
-      if (event === AUTH_EVENTS.LOGOUT) {
-        if (active) {
-          activeUserIdRef.current = null;
-          pendingPostIdsRef.current.clear();
-          postSavePromisesRef.current.clear();
-          clearCachedAppState();
-          dispatch({ type: 'SIGN_OUT' });
-          dispatch({ type: 'AUTH_CHECKED' });
-          if (window.location.pathname !== '/login') window.location.replace('/login');
-        }
-        return;
-      }
 
+    const handleLogout = () => {
+      persistIdentityCookiesFromLocalStorage();
+      if (active) {
+        resetToSignedOut();
+      }
+    };
+
+    const handleLogin = (user: unknown) => {
+      // Automatically close the Netlify Identity widget modal overlay
+      try {
+        netlifyIdentity.close();
+      } catch {
+        // Safe fallback if modal is already closed
+      }
+      persistIdentityCookiesFromLocalStorage();
       loadSessionUser()
-        .then((user) => {
+        .then((sessionUser) => {
           if (!active) return;
-          if (user) dispatch({ type: 'SIGN_IN', user });
+          if (sessionUser) {
+            dispatch({ type: 'SIGN_IN', user: sessionUser });
+          } else if (user) {
+            // Fallback: reload page to ensure cookie synchronization with /api/session
+            window.location.reload();
+          }
           dispatch({ type: 'AUTH_CHECKED' });
         })
-        .catch((err) => console.error('Failed to sync session', err));
-    });
+        .catch((err) => {
+          console.error('Failed to sync session', err);
+          window.location.reload();
+        });
+    };
 
-    const { data: supabaseAuthListener } = supabase.auth.onAuthStateChange((event) => {
-      if (!active) return;
-      if (event === 'TOKEN_REFRESHED') return;
-      if (event === 'SIGNED_OUT') {
-        activeUserIdRef.current = null;
-        pendingPostIdsRef.current.clear();
-        postSavePromisesRef.current.clear();
-        clearCachedAppState();
-        dispatch({ type: 'SIGN_OUT' });
-        dispatch({ type: 'AUTH_CHECKED' });
-        if (window.location.pathname !== '/login') window.location.replace('/login');
-      }
-    });
+    netlifyIdentity.on('logout', handleLogout);
+    netlifyIdentity.on('login', handleLogin);
+
+    let supabaseAuthListener: ReturnType<typeof supabase.auth.onAuthStateChange>['data'] | null = null;
+    const authListenerSetupTimeoutId = window.setTimeout(
+      () => finishAuthRestore(true),
+      AUTH_RESTORE_TIMEOUT_MS,
+    );
+
+    try {
+      const { data } = supabase.auth.onAuthStateChange((event) => {
+        const authEventTimeoutId = window.setTimeout(
+          () => finishAuthRestore(true),
+          AUTH_RESTORE_TIMEOUT_MS,
+        );
+
+        try {
+          if (!active || event === 'TOKEN_REFRESHED') return;
+          if (event === 'SIGNED_OUT') {
+            // Supabase also reports SIGNED_OUT when its own background refresh is
+            // rejected, so the stored keys are cleared here as well — synchronously,
+            // before the navigation below can unload the page.
+            clearLocalAuthStorage();
+            resetToSignedOut();
+          }
+        } catch (error) {
+          console.error('Failed to process the Supabase auth state change', error);
+        } finally {
+          window.clearTimeout(authEventTimeoutId);
+        }
+      });
+      supabaseAuthListener = data;
+    } catch (error) {
+      console.error('Failed to subscribe to Supabase auth state changes', error);
+    } finally {
+      window.clearTimeout(authListenerSetupTimeoutId);
+    }
+
+    // A phone that has been asleep for days wakes up holding an access token
+    // that expired long ago, and it is the refresh on the first foreground
+    // request that comes back 401. Re-checking when the tab becomes visible
+    // handles that once, here, instead of letting every screen fail its own
+    // request against a session that is already gone.
+    let lastSessionCheck = Date.now();
+    const revalidateSession = async () => {
+      if (!active || document.visibilityState !== 'visible') return;
+      if (Date.now() - lastSessionCheck < SESSION_RECHECK_INTERVAL_MS) return;
+      lastSessionCheck = Date.now();
+
+      const sessionCheck = await verifySupabaseSession();
+      if (!active || sessionCheck.status !== 'expired') return;
+      await handleExpiredSession('the session could not be refreshed after the app returned to the foreground');
+    };
+    const handleForeground = () => void revalidateSession();
+    document.addEventListener('visibilitychange', handleForeground);
+    window.addEventListener('focus', handleForeground);
 
     return () => {
       active = false;
-      unsubscribe();
-      supabaseAuthListener.subscription.unsubscribe();
+      window.clearTimeout(authRestoreTimeoutId);
+      netlifyIdentity.off('logout', handleLogout);
+      netlifyIdentity.off('login', handleLogin);
+      document.removeEventListener('visibilitychange', handleForeground);
+      window.removeEventListener('focus', handleForeground);
+      supabaseAuthListener?.subscription.unsubscribe();
     };
   }, []);
 
@@ -148,11 +280,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, [state.authChecked, state.currentUserId, state.postsCache, state.postsHasMoreCache, state.users]);
 
-  // Hydrate the signed-in user's profile from the database, so edits (like bio)
-  // survive reloads and follow the user across devices. A member who has no
-  // profile row yet (their very first sign-in) is registered immediately by
-  // saving their starter profile, so they appear in everyone else's directory
-  // and suggested connections right away.
+  // Hydrate the signed-in user's profile from the database
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -190,9 +318,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .catch((err) => console.error('Failed to load groups', err));
   }, [state.currentUserId]);
 
-  // Keep the community roster in sync with the real registered members in the
-  // database. Polling means a member who signs up in another session shows up
-  // in Suggested Connections and becomes available for messaging within moments.
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -212,8 +337,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [state.currentUserId]);
 
-  // Load the social graph from the perspective of the signed-in member and keep
-  // it fresh so incoming friend requests appear without a manual reload.
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -233,10 +356,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [state.currentUserId]);
 
-  // Load the active space's feed. Returning to a space already visited shows
-  // its cached posts instantly (no skeleton, no blank flash) while a background
-  // refresh keeps it current; a space visited for the first time shows the feed
-  // skeleton until its posts arrive.
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -310,8 +429,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [state.currentUserId, state.activeGroupId]);
 
-  // Chat messages are shared across every space, so they load once per session
-  // (not on every space switch) to avoid duplicate fetches.
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -357,7 +474,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (user) dispatch({ type: 'SIGN_IN', user });
           else {
             dispatch({ type: 'SIGN_OUT' });
-            logout().catch(() => undefined);
+            try {
+              netlifyIdentity.logout();
+            } catch {
+              // Safe fallback
+            }
           }
         })
         .catch((error) => console.error('Failed to verify session', error));
@@ -373,9 +494,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const getCurrent = (): User | undefined =>
       stateRef.current.users.find((u) => u?.id === stateRef.current.currentUserId);
 
-    // Persist a notification for a recipient. Fire-and-forget: the recipient's
-    // client picks it up on its next poll (badge + toast). Never notifies the
-    // actor about their own action.
     const emit = (n: Omit<Notification, 'id' | 'createdAt' | 'isRead'>) => {
       if (!n.userId || n.userId === n.actorId) return;
       const notification: Notification = {
@@ -406,7 +524,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         clearCachedAppState();
         dispatch({ type: 'SIGN_OUT' });
         void supabase.auth.signOut().catch((err) => console.error('Failed to clear the Supabase session', err));
-        logout().catch((err) => console.error('Failed to sign out', err));
+        try {
+          netlifyIdentity.logout();
+        } catch (err) {
+          console.error('Failed to sign out via identity', err);
+        }
+        // Both sign out calls above can fail against an already-rejected token,
+        // which used to leave the stored session behind and put the member
+        // straight back into the loop they were signing out of.
+        clearLocalAuthStorage();
       },
 
       async refreshGroups() {
@@ -562,8 +688,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const me = getCurrent();
         if (!me) return;
         const post = stateRef.current.posts.find((p) => p.id === postId) ?? sourcePost;
-        // Read the pre-toggle state to tell a like from an unlike, so a
-        // notification only fires when the member is adding a like.
         const currentLikes = postLikes(post);
         const isNewLike = post ? !currentLikes.includes(me.id) : false;
         dispatch({ type: 'TOGGLE_LIKE', postId, userId: me.id });
@@ -666,7 +790,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           readAt: null,
         };
         dispatch({ type: 'SEND_MESSAGE', message });
-        // Notify the other participant that they have a new direct message.
         const recipient = threadId.split('__').find((id) => id !== me.id);
         saveMessage(message)
           .then(() => {
@@ -791,7 +914,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
 export { useStore };
 
-// helper for the Landing page demo
 export function pickGooglePhoto(seed: string): string {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;

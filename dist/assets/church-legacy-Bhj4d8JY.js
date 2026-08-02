@@ -1,8 +1,0 @@
-System.register(["./x-legacy-Coyz1ehY.js"],function(e,t){"use strict";var a;return{setters:[function(e){a=e.c}],execute:function(){
-/**
-       * @license lucide-react v0.344.0 - ISC
-       *
-       * This source code is licensed under the ISC license.
-       * See the LICENSE file in the root directory of this source tree.
-       */
-e("C",a("Church",[["path",{d:"m18 7 4 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9l4-2",key:"gy5gyo"}],["path",{d:"M14 22v-4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v4",key:"cpkuc4"}],["path",{d:"M18 22V5l-6-3-6 3v17",key:"1hsnhq"}],["path",{d:"M12 7v5",key:"ma6bk"}],["path",{d:"M10 9h4",key:"u4k05v"}]]))}}});

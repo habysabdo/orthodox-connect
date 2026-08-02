@@ -1,4 +1,3 @@
-import { getUser, logout, type User as IdentityUser } from '@netlify/identity';
 import { eq } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import { adminNotifications, users } from '../../db/schema.js';
@@ -6,6 +5,21 @@ import { adminNotifications, users } from '../../db/schema.js';
 export type AppRole = 'user' | 'admin';
 export type AppStatus = 'active' | 'blocked';
 export const SUPER_ADMIN_EMAIL = 'lucasautocode@gmail.com';
+
+export interface IdentityUser {
+  id: string;
+  email?: string;
+  role?: string;
+  provider?: string;
+  roles?: string[];
+  name?: string;
+  pictureUrl?: string;
+  confirmedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  userMetadata?: Record<string, unknown>;
+  appMetadata?: Record<string, unknown>;
+}
 
 export interface AppActor {
   id: string;
@@ -77,7 +91,7 @@ function normalizeIdentityApiUser(value: IdentityApiUser): IdentityUser | null {
     id,
     email: optionalString(value.email),
     role: optionalString(value.role),
-    provider: optionalString(appMetadata.provider) as IdentityUser['provider'],
+    provider: optionalString(appMetadata.provider),
     roles,
     name: optionalString(userMetadata.full_name) ?? optionalString(userMetadata.name),
     pictureUrl: optionalString(userMetadata.avatar_url),
@@ -141,7 +155,7 @@ export async function syncIdentityUser(identity: IdentityUser) {
 }
 
 export async function requireAppUser(req?: Request): Promise<AppActor | Response> {
-  const identity = (await getUser()) ?? (await identityFromBearer(req));
+  const identity = await identityFromBearer(req);
   if (!identity) {
     return Response.json({ error: 'Authentication required' }, { status: 401 });
   }
@@ -152,7 +166,6 @@ export async function requireAppUser(req?: Request): Promise<AppActor | Response
   }
 
   if (appUser.status === 'blocked') {
-    await logout().catch(() => undefined);
     return Response.json({ error: 'This account has been blocked' }, { status: 403 });
   }
 
@@ -163,8 +176,8 @@ export async function requireAppUser(req?: Request): Promise<AppActor | Response
   };
 }
 
-export async function requireAdmin(): Promise<AppActor | Response> {
-  const actor = await requireAppUser();
+export async function requireAdmin(req?: Request): Promise<AppActor | Response> {
+  const actor = await requireAppUser(req);
   if (actor instanceof Response) return actor;
   if (actor.role !== 'admin') {
     return Response.json({ error: 'Administrator access required' }, { status: 403 });

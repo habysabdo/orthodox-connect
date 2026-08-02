@@ -1,6 +1,78 @@
 import React, { useState } from 'react';
 import { Mail, Lock, User, UserPlus, LogIn, AlertCircle } from 'lucide-react';
-import { AuthError, login, signup } from '@netlify/identity';
+import netlifyIdentity from 'netlify-identity-widget';
+import { persistIdentityCookiesFromLocalStorage } from '../lib/auth';
+import {
+  clearLocalAuthStorage,
+  clearSessionExpiredNotice,
+  hasSessionExpiredNotice,
+} from '../lib/sessionRecovery';
+
+type GoTrueClient = {
+  login: (email: string, password: string, remember?: boolean) => Promise<unknown>;
+  signup: (
+    email: string,
+    password: string,
+    data?: Record<string, unknown>
+  ) => Promise<{ confirmed_at?: string | null; email_confirmed_at?: string | null } | undefined>;
+};
+
+/**
+ * Resolve the headless GoTrue client that backs Netlify Identity.
+ *
+ * Never read `netlifyIdentity.gotrue`: that getter opens the prebuilt widget
+ * modal as a side effect whenever the client is not ready yet, which is what
+ * stacked a blank iframe popup on top of this card. The store holds the same
+ * instance without any side effect.
+ */
+function resolveGoTrueClient(): GoTrueClient | null {
+  const widget = netlifyIdentity as { store?: { gotrue?: GoTrueClient | null }; init?: (options?: unknown) => void };
+
+  if (widget.store?.gotrue) return widget.store.gotrue;
+
+  // The store is only populated once the widget has been initialized. init() is
+  // idempotent and, unlike open(), never renders the modal.
+  try {
+    widget.init?.();
+  } catch {
+    // Safe fallback if initialized already
+  }
+  if (widget.store?.gotrue) return widget.store.gotrue;
+
+  // Last resort: the widget bundle exposes the GoTrue constructor globally, so
+  // we can talk to this site's Identity instance directly.
+  const GoTrue = (window as { GoTrue?: new (options: Record<string, unknown>) => GoTrueClient }).GoTrue;
+  if (!GoTrue) return null;
+
+  return new GoTrue({
+    APIUrl: `${window.location.origin}/.netlify/identity`,
+    setCookie: true,
+    clientName: 'orthodox-connect',
+  });
+}
+
+function describeAuthError(err: unknown, isRegister: boolean): string {
+  const status = (err as { status?: number } | null)?.status;
+  const message = err instanceof Error && err.message ? err.message : '';
+
+  if (/email not confirmed/i.test(message)) {
+    return 'Please confirm your email address first — check your inbox for the confirmation link.';
+  }
+  switch (status) {
+    case 401:
+      return 'Invalid email or password.';
+    case 403:
+      return isRegister
+        ? 'Registration is currently closed. Ask a parish administrator for an invite.'
+        : 'This account is not allowed to sign in.';
+    case 422:
+      return message || 'Please check your email address and choose a stronger password.';
+    case 404:
+      return 'We could not find an account with that email address.';
+    default:
+      return message || 'Something went wrong. Please try again.';
+  }
+}
 
 export const AuthModal: React.FC = () => {
   const [isRegister, setIsRegister] = useState(false);
@@ -8,40 +80,63 @@ export const AuthModal: React.FC = () => {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState(() =>
+    // A member who was signed out by a failed refresh arrives here without
+    // having asked to, so the form opens by explaining why.
+    hasSessionExpiredNotice() ? 'Your session expired, so you were signed out. Please log in again.' : '',
+  );
   const [busy, setBusy] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setNotice('');
-
-    if (!email || !password) {
-      setError('Please fill in all required fields.');
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
-      return;
-    }
+    clearSessionExpiredNotice();
 
     setBusy(true);
+    let navigating = false;
     try {
-      if (isRegister) {
-        const user = await signup(email, password, { full_name: fullName });
-        if (!user.confirmedAt) {
-          setNotice('Account created. Please check your email to confirm, then log in.');
-          setIsRegister(false);
-        }
-      } else {
-        await login(email, password);
+      const gotrue = resolveGoTrueClient();
+      if (!gotrue) {
+        setError('Sign in is unavailable right now. Please reload the page and try again.');
+        return;
       }
+
+      // This form is only reachable while nobody is signed in, so any session
+      // still on disk is a leftover from a refresh that failed. Dropping it
+      // first means this attempt starts from a clean slate instead of having
+      // GoTrue reuse a token the server has already rejected.
+      clearLocalAuthStorage();
+
+      if (isRegister) {
+        const created = await gotrue.signup(email, password, { full_name: fullName });
+        const autoConfirmed = Boolean(created?.confirmed_at || created?.email_confirmed_at);
+
+        if (!autoConfirmed) {
+          // Confirmation is required, so no session exists yet.
+          setNotice('Account created. Check your inbox to confirm your email, then log in.');
+          setIsRegister(false);
+          setPassword('');
+          return;
+        }
+      }
+
+      // `remember: true` makes GoTrue persist the session to localStorage and
+      // ask Identity for a durable nf_jwt cookie rather than a session cookie.
+      await gotrue.login(email, password, true);
+
+      // Mirror the stored session into the nf_jwt / nf_refresh cookies so the
+      // CDN and our /api routes see the signed-in user, then do a full
+      // navigation into the parish dashboard with those cookies attached.
+      persistIdentityCookiesFromLocalStorage();
+      navigating = true;
+      if (window.location.pathname === '/login') window.location.replace('/');
+      else window.location.reload();
     } catch (err) {
       console.error('Authentication failed', err);
-      setError(err instanceof AuthError ? err.message : 'Something went wrong. Please try again.');
+      setError(describeAuthError(err, isRegister));
     } finally {
-      setBusy(false);
+      if (!navigating) setBusy(false);
     }
   };
 

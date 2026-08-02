@@ -2,13 +2,38 @@
   command = "npm run build"
   publish = "dist"
 
-[[redirects]]
-  from = "/admin"
-  to = "/index.html"
-  status = 200
+[build.environment]
+  NODE_VERSION = "22"
+
+# Vite exposes VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY automatically when
+# they are set in Netlify Site configuration for Production, Deploy Previews,
+# and Branch deploys. Values intentionally remain outside source control.
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-  force = false
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), payment=(), usb=()"
+    Cross-Origin-Opener-Policy = "same-origin-allow-popups"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

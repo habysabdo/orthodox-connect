@@ -7,7 +7,11 @@ const env = import.meta.env as Record<string, string | undefined>;
 
 /**
  * The Jitsi deployment the meeting iframe connects to.
+<<<<<<< HEAD
  * Defaults to `8x8.vc` or unmoderated Jitsi parameters to bypass moderator lockouts.
+=======
+ * Defaults strictly to public `meet.jit.si` to avoid 8x8 moderator lockouts.
+>>>>>>> e2a2e8d6ee7d1a518d0612113f7d179adff8691d
  */
 export const JITSI_DOMAIN = (env.VITE_JITSI_DOMAIN ?? '')
   .trim()
@@ -26,7 +30,11 @@ const ROOM_LABEL = 'PrayerRoom';
 /** Legacy prefixes that older invite links may still carry. */
 const ROOM_ID_PREFIX = /^(?:PrayerRoom_|meet-)/;
 
+<<<<<<< HEAD
 /** Default config overwrites to pass to Jitsi SDK to bypass lobby & moderator screens */
+=======
+/** Default config overwrites passed to Jitsi SDK to bypass lobby & moderator screens */
+>>>>>>> e2a2e8d6ee7d1a518d0612113f7d179adff8691d
 export const JITSI_CONFIG_OVERWRITE = {
   prejoinPageEnabled: false,
   enableLobby: false,
@@ -34,6 +42,10 @@ export const JITSI_CONFIG_OVERWRITE = {
   requireDisplayName: false,
   startWithAudioMuted: false,
   startWithVideoMuted: false,
+<<<<<<< HEAD
+=======
+  disableDeepLinking: true,
+>>>>>>> e2a2e8d6ee7d1a518d0612113f7d179adff8691d
 };
 
 /** A short, unguessable token appended to a room id. */
@@ -86,8 +98,12 @@ export function meetingUrl(roomId: string): string {
 }
 
 /**
+<<<<<<< HEAD
  * The Jitsi room name for a room id. Appends hash parameters if using direct iframe
  * URLs to bypass the "waiting for moderator" lobby screen completely.
+=======
+ * Clean Jitsi room name for a room id.
+>>>>>>> e2a2e8d6ee7d1a518d0612113f7d179adff8691d
  */
 export function jitsiRoomName(roomId: string): string {
   const id = sanitizeMeetingId(roomId);

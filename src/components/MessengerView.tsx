@@ -7,7 +7,6 @@ import {
   Image,
   MessageCircle,
   Mic,
-  Paperclip,
   Send,
   Square,
   ThumbsUp,
@@ -28,6 +27,7 @@ import { clockTime, timeAgo } from '@/utils/format';
 import { firstName, userName, userPhoto } from '@/utils/postSafety';
 import { uploadChatAttachment } from '@/utils/chatMedia';
 import { createMeetingId, decodeChatInvite, encodeChatInvite } from '@/utils/meetings';
+import { publishIncomingCall } from '@/utils/callSignaling';
 
 interface PendingFile {
   id: string;
@@ -113,7 +113,7 @@ function MessageAttachment({ attachment }: { attachment: ChatAttachment }) {
       href={`${attachment.url}&download=1`}
       className="flex min-w-52 items-center gap-3 rounded-2xl bg-black/5 dark:bg-white/10 px-3 py-2.5 hover:bg-black/10"
     >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-current/10">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-current/10">
         <FileIcon size={18} />
       </span>
       <span className="min-w-0 flex-1">
@@ -372,13 +372,38 @@ export function MessengerView() {
     const roomId = createMeetingId();
     const title = me ? `Video call with ${me.name}` : 'Video call';
     
+<<<<<<< HEAD
     // Play outbound ringtone sound locally for caller
     const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3');
     audio.play().catch(() => {});
 
     state.sendMessage(activeThread.id, encodeChatInvite({ roomId, title, hostId: me?.id, startedAt: Date.now() }));
+=======
+    // Play outbound audio locally for caller
+    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3');
+    audio.play().catch(() => {});
+
+    // Send call invite to chat thread
+    state.sendMessage(activeThread.id, encodeChatInvite({ roomId, title, hostId: me?.id }));
+    
+    // Publish real-time signaling event to trigger receiver ringtone & overlay
+    if (activeFriend) {
+      publishIncomingCall(activeFriend.id, {
+        roomId,
+        title,
+        callerId: me.id,
+        callerName: me.name,
+        callerPhoto: me.photo,
+        threadId: activeThread.id,
+        startedAt: Date.now(),
+      });
+    }
+
+>>>>>>> e2a2e8d6ee7d1a518d0612113f7d179adff8691d
     openMeeting(roomId, title);
   };
+
+  const joinCall = (roomId: string, title: string) => openMeeting(roomId, title);
 
   const openConversation = (threadId: string, friendId: string) => {
     if (!state.threads.some((thread) => thread.id === threadId)) setOpenThreadId(state.openThreadWith(friendId));
@@ -476,7 +501,11 @@ export function MessengerView() {
                             </div>
                           </div>
                           <button
+<<<<<<< HEAD
                             onClick={startVideoCall}
+=======
+                            onClick={() => joinCall(invite.roomId, invite.title)}
+>>>>>>> e2a2e8d6ee7d1a518d0612113f7d179adff8691d
                             className="w-full rounded-xl bg-white dark:bg-gray-700 py-2 text-center text-sm font-semibold text-black dark:text-white shadow-sm transition hover:bg-gray-50"
                           >
                             Join call

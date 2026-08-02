@@ -189,6 +189,7 @@ html.theme-transition * {
 :root:not(.dark) .hover\:text-emerald-300:hover {
   color: #067647;
 }
+
 @keyframes reel-heart-burst {
   0% { opacity: 0; transform: scale(0.35) rotate(-8deg); }
   30% { opacity: 1; transform: scale(1.12) rotate(3deg); }
@@ -204,4 +205,17 @@ html.theme-transition * {
   .reel-heart-burst {
     animation-duration: 180ms;
   }
+}
+
+/* Forcefully hide default Netlify Identity modal iframe overlay.
+   The widget mounts its iframe as #netlify-identity-widget with src="about:blank",
+   so that id has to be listed explicitly — the other selectors never match it. */
+#netlify-modal-assembly,
+#netlify-identity-widget,
+.netlify-identity-widget,
+iframe[src*="netlify-identity-widget"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }

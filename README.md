@@ -2,6 +2,10 @@
 
 [![Open in Bolt](https://bolt.new/static/open-in-bolt.svg)](https://bolt.new/~/sb1-zzqmd3zn)
 
+## Authentication deployment
+
+See [the Netlify and Supabase authentication troubleshooting guide](docs/auth-deployment-troubleshooting.md) for build-time environment validation, Supabase redirect configuration, and the auth-loading timeout behavior.
+
 ## Admin user management
 
 The Admin Panel user-management tools require these server-side Netlify environment variables:

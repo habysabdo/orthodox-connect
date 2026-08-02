@@ -10,10 +10,8 @@ const TITLE_PLACEHOLDER = 'Evening Praise & Prayer';
 /**
  * The "Start Prayer Meeting" creator.
  *
- * A room needs nothing but an id, so the modal mints a unique one
- * (`PrayerRoom_<timestamp>_<token>`) as soon as it opens and offers the two ways
- * a host wants to use it: join right away, or announce it on the feed so the
- * whole community can join with one tap.
+ * Minting a unique room id (`PrayerRoom_<timestamp>_<token>`) as soon as opened,
+ * offering hosts two ways to use it: join right away, or announce it to the community feed.
  */
 export function PrayerMeetingModal() {
   const { createPost } = useStore();
@@ -24,8 +22,7 @@ export function PrayerMeetingModal() {
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState('');
 
-  // A fresh id per opening, so two meetings started in one session never share
-  // a room.
+  // A fresh id per opening so meetings started in one session never collide.
   useEffect(() => {
     if (!prayerMeetingOpen) return;
     setRoomId(createMeetingId());
@@ -45,6 +42,9 @@ export function PrayerMeetingModal() {
 
   const joinNow = () => {
     if (!roomId) return;
+    // 1. Close creator modal
+    setPrayerMeetingOpen(false);
+    // 2. Open group Jitsi prayer room
     openMeeting(roomId, heading);
   };
 
@@ -125,7 +125,6 @@ export function PrayerMeetingModal() {
         </div>
         <p className="text-xs text-ink-400">
           Posting to the feed publishes a “Join Live Prayer Meeting” card so anyone in the community can enter the room.
-          Camera and microphone stay muted until each member allows them.
         </p>
       </div>
     </Modal>
