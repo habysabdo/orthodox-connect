@@ -10,7 +10,6 @@ import { hasAdminAccess } from '@/utils/users';
 import { ErrorBoundary } from './ErrorBoundary';
 
 // Route views, sidebars, search, and overlays are fetched only when rendered.
-// This keeps the authenticated shell small while retaining every existing view.
 const FeedView = lazy(() => import('./FeedView').then((m) => ({ default: m.FeedView })));
 const GroupFeedView = lazy(() => import('./GroupFeedView').then((m) => ({ default: m.GroupFeedView })));
 const GroupsView = lazy(() => import('./GroupsView').then((m) => ({ default: m.GroupsView })));
@@ -75,8 +74,6 @@ export function AppShell() {
 
   if (!me) return <FeedSkeleton />;
 
-  // A meeting takes over the whole screen — the conference needs the height, and
-  // the sidebars are noise while praying together.
   if (view === 'meet') {
     return (
       <ErrorBoundary name="Prayer meeting" variant="section" resetKeys={[view]}>
@@ -91,7 +88,7 @@ export function AppShell() {
     <div className="min-h-screen bg-ink-950 text-ink-100">
       {/* Top bar */}
       <header className="sticky top-0 z-30 border-b border-ink-800 bg-ink-950/85 backdrop-blur-md">
-        <div className="mx-auto flex h-14 max-w-[1500px] items-center gap-1.5 px-3 sm:gap-2 sm:px-4">
+        <div className="mx-auto flex h-14 w-full max-w-[1500px] items-center gap-1.5 px-2 sm:gap-2 sm:px-4">
           <button
             onClick={() => setLeftOpen(true)}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-300 transition-colors hover:bg-ink-800 hover:text-gold-200 lg:hidden"
@@ -107,7 +104,7 @@ export function AppShell() {
             <Logo size={32} />
           </button>
 
-          {/* Global search — full bar on md+, collapses to an icon below md */}
+          {/* Global search */}
           <ErrorBoundary
             name="Search"
             resetKeys={[currentUserId]}
@@ -118,12 +115,11 @@ export function AppShell() {
             )}
           >
             <Suspense fallback={<div className="h-9 w-9 shrink-0 rounded-full bg-ink-850 md:mx-2 md:flex-1 md:max-w-md" />}>
-              <GlobalSearch className="min-w-0 shrink-0 md:mx-2 md:flex-1 md:max-w-md" />
+              <GlobalSearch className="min-w-0 flex-1 md:mx-2 md:max-w-md" />
             </Suspense>
           </ErrorBoundary>
 
-          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
-            {/* Start Prayer Meeting in header */}
+          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
             <button
               onClick={() => setPrayerMeetingOpen(true)}
               className="ghost-btn hidden h-9 shrink-0 rounded-full px-3 py-0 text-sm lg:flex"
@@ -139,7 +135,6 @@ export function AppShell() {
               <Video size={17} />
             </button>
 
-            {/* Go Live in header */}
             <button
               onClick={() => setGoLiveOpen(true)}
               className="gold-btn hidden h-9 shrink-0 rounded-full px-3 py-0 text-sm lg:flex"
@@ -162,7 +157,7 @@ export function AppShell() {
             <button
               type="button"
               onClick={() => setView('network')}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-ink-700 bg-ink-850 text-ink-300 shadow-sm transition-colors hover:border-gold-400/60 hover:bg-ink-800 hover:text-gold-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-950"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-ink-700 bg-ink-850 text-ink-300 shadow-sm transition-colors hover:border-gold-400/60 hover:bg-ink-800 hover:text-gold-200 focus-visible:outline-none"
               aria-label={t('nav.network')}
               title={t('nav.network')}
             >
@@ -174,9 +169,7 @@ export function AppShell() {
               resetKeys={[currentUserId]}
               fallback={<span className="h-9 w-9 shrink-0 rounded-full bg-ink-850" aria-label="Notifications unavailable" />}
             >
-              <NotificationBell
-                activeThreadId={view === 'messenger' ? openThreadId : null}
-              />
+              <NotificationBell activeThreadId={view === 'messenger' ? openThreadId : null} />
             </ErrorBoundary>
 
             {adminAccess && (
@@ -191,7 +184,7 @@ export function AppShell() {
 
             <button
               onClick={() => setView('profile')}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-950"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full focus-visible:outline-none"
               aria-label={t('nav.profile')}
             >
               <Avatar src={me.photo} name={me.name} size={34} ring="gold" online />
@@ -200,8 +193,8 @@ export function AppShell() {
         </div>
       </header>
 
-      {/* 3-column layout */}
-      <div className={`mx-auto flex gap-0 px-0 ${view === 'reels' ? 'max-w-none' : 'max-w-[1500px] lg:px-4 lg:py-4'}`}>
+      {/* Main layout container */}
+      <div className={`mx-auto flex w-full gap-0 px-0 ${view === 'reels' ? 'max-w-none' : 'max-w-[1500px] lg:px-4 lg:py-4'}`}>
         {/* Left sidebar */}
         <div className={`hidden w-64 shrink-0 lg:block ${view === 'reels' ? 'lg:!hidden' : ''}`}>
           <div className="sticky top-[4.5rem] card !rounded-2xl">
@@ -213,9 +206,9 @@ export function AppShell() {
           </div>
         </div>
 
-        {/* Middle content */}
-        <main className={`min-w-0 flex-1 ${view === 'reels' ? 'p-0' : 'px-3 py-4 sm:px-4 lg:px-4'}`}>
-          <div className={view === 'reels' || view === 'groups' ? 'mx-auto max-w-5xl' : 'mx-auto max-w-2xl'}>
+        {/* Middle content wrapper */}
+        <main className={`w-full min-w-0 flex-1 ${view === 'reels' ? 'p-0' : 'px-1 py-2 sm:px-4 lg:px-4'}`}>
+          <div className={view === 'reels' || view === 'groups' ? 'mx-auto w-full max-w-5xl' : 'mx-auto w-full max-w-2xl'}>
             <ErrorBoundary name="This page" variant="section" resetKeys={[view, groupRouteId, activeGroupId]}>
               <Suspense fallback={<FeedSkeleton />}>
                 {view === 'feed' && (activeGroupId === null ? <FeedView /> : <FeedSkeleton />)}
@@ -274,7 +267,7 @@ export function AppShell() {
         </div>
       )}
 
-      {/* Global overlays — each chunk is fetched the first time it is opened */}
+      {/* Global overlays */}
       <ErrorBoundary name="Live video" fallback={null} resetKeys={[goLiveOpen, openStreamId]}>
         <Suspense fallback={null}>
           {goLiveOpen && <GoLiveModal />}
