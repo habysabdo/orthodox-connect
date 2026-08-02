@@ -50,6 +50,14 @@ export function apiBase(): string {
 
 export function apiUrl(path: string): string {
   const relative = path.startsWith('/') ? path : `/${path}`;
+
+  // 🛑 Intercept legacy Netlify or missing local API routes to prevent Cloudflare 404 HTML returns
+  if (relative.startsWith('/api/') || relative.startsWith('/.netlify/')) {
+    console.warn(`[Config] Prevented legacy Netlify request to: ${relative}`);
+    // Returning an unresolvable data URI forces fetch() to fail safely rather than parsing an HTML string as JSON
+    return 'data:application/json,[]';
+  }
+
   const base = apiBase();
   return base ? `${base}${relative}` : relative;
 }

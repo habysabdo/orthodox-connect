@@ -1,36 +1,77 @@
 import type { Notification } from '../types';
-import { apiUrl } from '../lib/config';
+import { supabase } from '../lib/supabase';
 
 // Load the signed-in member's notifications, newest first.
 export async function loadNotifications(userId: string): Promise<Notification[]> {
-  const res = await fetch(apiUrl(`/api/notifications?userId=${encodeURIComponent(userId)}`));
-  if (!res.ok) throw new Error('Failed to load notifications');
-  return res.json();
+  if (!userId) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Failed to load notifications from Supabase:', error);
+      return [];
+    }
+
+    return (data as Notification[]) || [];
+  } catch (err) {
+    console.error('Error in loadNotifications:', err);
+    return [];
+  }
 }
 
-// Persist a single notification. Fired when a member likes a post or sends a
-// direct message; fire-and-forget from the caller's perspective.
+// Persist a single notification.
 export async function createNotification(notification: Notification): Promise<void> {
-  const res = await fetch(apiUrl('/api/notifications'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(notification),
-  });
-  if (!res.ok) throw new Error('Failed to create notification');
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .insert([notification]);
+
+    if (error) {
+      console.error('Failed to create notification in Supabase:', error);
+    }
+  } catch (err) {
+    console.error('Error in createNotification:', err);
+  }
 }
 
 // Mark every unread notification for a member as read ("Mark all as read").
 export async function markAllNotificationsRead(userId: string): Promise<void> {
-  const res = await fetch(apiUrl(`/api/notifications?userId=${encodeURIComponent(userId)}`), {
-    method: 'PATCH',
-  });
-  if (!res.ok) throw new Error('Failed to mark notifications read');
+  if (!userId) return;
+
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ isRead: true })
+      .eq('user_id', userId)
+      .eq('isRead', false);
+
+    if (error) {
+      console.error('Failed to mark all notifications read in Supabase:', error);
+    }
+  } catch (err) {
+    console.error('Error in markAllNotificationsRead:', err);
+  }
 }
 
 // Mark a single notification as read.
 export async function markNotificationRead(id: string): Promise<void> {
-  const res = await fetch(apiUrl(`/api/notifications?id=${encodeURIComponent(id)}`), {
-    method: 'PATCH',
-  });
-  if (!res.ok) throw new Error('Failed to mark notification read');
+  if (!id) return;
+
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ isRead: true })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Failed to mark notification read in Supabase:', error);
+    }
+  } catch (err) {
+    console.error('Error in markNotificationRead:', err);
+  }
 }
