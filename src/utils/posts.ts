@@ -1,99 +1,106 @@
+import { supabase } from '../lib/supabase';
 import type { Post } from '../types';
-import { identityAuthorizationHeaders } from '../lib/auth';
-import { apiUrl } from '../lib/config';
-import { normalizePost, normalizePosts, normalizeReelsPage } from './postSafety';
 
-export interface ReelsPage {
-  posts: Post[];
-  hasMore: boolean;
+export async function loadPosts(
+  groupId: string | null = null,
+  options: { limit?: number; before?: number } = {}
+): Promise<Post[]> {
+  try {
+    let query = supabase
+      .from('posts')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (groupId) {
+      query = query.eq('group_id', groupId);
+    } else {
+      query = query.is('group_id', null);
+    }
+
+    if (options.before) {
+      query = query.lt('created_at', new Date(options.before).toISOString());
+    }
+
+    if (options.limit) {
+      query = query.limit(options.limit);
+    }
+
+    const { data, error } = await query;
+    if (error || !data) return [];
+
+    return data.map((row: any) => ({
+      id: row.id,
+      authorId: row.author_id,
+      text: row.text || '',
+      image: row.image || undefined,
+      video: row.video || undefined,
+      createdAt: new Date(row.created_at).getTime(),
+      likes: row.likes || [],
+      comments: row.comments || [],
+      groupId: row.group_id || null,
+    }));
+  } catch {
+    return [];
+  }
 }
 
-// Load the centralized text, image, and video feed (newest first).
-export async function loadPosts(groupId?: string | null, options: { limit?: number; before?: number } = {}): Promise<Post[]> {
-  const params = new URLSearchParams({ refresh: Date.now().toString() });
-  if (groupId) params.set('group_id', groupId);
-  params.set('limit', String(options.limit ?? 10));
-  if (options.before) params.set('before', String(options.before));
-  const query = `?${params.toString()}`;
-  const res = await fetch(apiUrl(`/api/posts${query}`), {
-    cache: 'no-store',
-    headers: identityAuthorizationHeaders(),
-  });
-  if (!res.ok) throw new Error('Failed to load posts');
-  return normalizePosts(await res.json());
+export async function savePost(post: Post): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('posts').upsert({
+      id: post.id,
+      author_id: post.authorId,
+      text: post.text,
+      image: post.image || null,
+      video: post.video || null,
+      created_at: new Date(post.createdAt).toISOString(),
+      likes: post.likes || [],
+      comments: post.comments || [],
+      group_id: post.groupId || null,
+    });
+    return !error;
+  } catch {
+    return false;
+  }
 }
 
-// Load a single member's public posts (newest first) for their profile page.
-export async function loadPostsByAuthor(authorId: string, limit = 30): Promise<Post[]> {
-  const params = new URLSearchParams({
-    author_id: authorId,
-    limit: String(limit),
-    refresh: Date.now().toString(),
-  });
-  const res = await fetch(apiUrl(`/api/posts?${params.toString()}`), {
-    cache: 'no-store',
-    headers: identityAuthorizationHeaders(),
-  });
-  if (!res.ok) throw new Error('Failed to load this member’s posts');
-  return normalizePosts(await res.json());
+export async function loadPost(postId: string): Promise<Post> {
+  const { data } = await supabase.from('posts').select('*').eq('id', postId).single();
+  if (!data) throw new Error('Post not found');
+
+  return {
+    id: data.id,
+    authorId: data.author_id,
+    text: data.text || '',
+    image: data.image || undefined,
+    video: data.video || undefined,
+    createdAt: new Date(data.created_at).getTime(),
+    likes: data.likes || [],
+    comments: data.comments || [],
+    groupId: data.group_id || null,
+  };
 }
 
-export async function loadReels(options: {
-  groupId?: string | null;
-  seed: string;
-  offset: number;
-  limit?: number;
-}): Promise<ReelsPage> {
-  const params = new URLSearchParams({
-    reels: 'true',
-    seed: options.seed,
-    offset: String(options.offset),
-    limit: String(options.limit ?? 8),
-    refresh: Date.now().toString(),
-  });
-  if (options.groupId) params.set('group_id', options.groupId);
-  const res = await fetch(apiUrl(`/api/posts?${params.toString()}`), {
-    cache: 'no-store',
-    headers: identityAuthorizationHeaders(),
-  });
-  if (!res.ok) throw new Error('Failed to load reels');
-  return normalizeReelsPage(await res.json());
+export async function deletePost(postId: string): Promise<boolean> {
+  const { error } = await supabase.from('posts').delete().eq('id', postId);
+  return !error;
 }
 
-// Create or update a single post (used for new posts, likes, comments, flags).
-export async function savePost(post: Post): Promise<void> {
-  const res = await fetch(apiUrl('/api/posts'), {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...identityAuthorizationHeaders() },
-    body: JSON.stringify(post),
-  });
-  if (!res.ok) throw new Error('Failed to save post');
-}
-
-export async function createReshare(originalPostId: string, kind: 'repost' | 'quote', quote = ''): Promise<Post> {
-  const res = await fetch(apiUrl('/api/posts'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...identityAuthorizationHeaders() },
-    body: JSON.stringify({ originalPostId, kind, quote }),
-  });
-  if (!res.ok) throw new Error('Failed to re-share post');
-  return normalizePost(await res.json());
-}
-
-export async function loadPost(id: string): Promise<Post> {
-  const res = await fetch(apiUrl(`/api/posts?id=${encodeURIComponent(id)}`), {
-    cache: 'no-store',
-    headers: identityAuthorizationHeaders(),
-  });
-  if (!res.ok) throw new Error('Failed to load post');
-  return normalizePost(await res.json());
-}
-
-// Remove a post from the database.
-export async function deletePost(id: string): Promise<void> {
-  const res = await fetch(apiUrl(`/api/posts?id=${encodeURIComponent(id)}`), {
-    method: 'DELETE',
-    headers: identityAuthorizationHeaders(),
-  });
-  if (!res.ok) throw new Error('Failed to delete post');
+export async function createReshare(
+  postId: string,
+  kind: string,
+  quote: string
+): Promise<Post> {
+  const original = await loadPost(postId);
+  const resharedPost: Post = {
+    id: `p_${Date.now()}`,
+    authorId: original.authorId,
+    text: quote || original.text,
+    createdAt: Date.now(),
+    likes: [],
+    comments: [],
+    groupId: original.groupId,
+    originalPost: original,
+  };
+  await savePost(resharedPost);
+  return resharedPost;
 }
