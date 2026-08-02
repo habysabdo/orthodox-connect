@@ -71,9 +71,15 @@ export function initialState(): AppState {
   const cached = loadCachedAppState();
   const postsCache = cached?.postsCache ?? {};
   const publicPosts = postsCache[groupCacheKey(null)] ?? [];
+  
+  // Normalize user ID in case cached user references subject_id
+  const cachedUser = cached?.user
+    ? { ...cached.user, id: (cached.user as any).subject_id || cached.user.id }
+    : null;
+
   return {
-    users: cached ? [cached.user] : [],
-    currentUserId: cached?.user.id ?? null,
+    users: cachedUser ? [cachedUser] : [],
+    currentUserId: cachedUser?.id ?? null,
     authChecked: false,
     groups: [],
     activeGroupId: null,
@@ -95,8 +101,18 @@ export function initialState(): AppState {
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
-    case 'SIGN_IN':
-      return { ...state, users: upsertUser(state.users, action.user), currentUserId: action.user.id, authChecked: true };
+    case 'SIGN_IN': {
+      const normalizedUser = {
+        ...action.user,
+        id: (action.user as any).subject_id || action.user.id,
+      };
+      return { 
+        ...state, 
+        users: upsertUser(state.users, normalizedUser), 
+        currentUserId: normalizedUser.id, 
+        authChecked: true 
+      };
+    }
 
     case 'AUTH_CHECKED':
       return state.authChecked ? state : { ...state, authChecked: true };
@@ -116,18 +132,23 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'HYDRATE_PROFILE':
       return {
         ...state,
-        users: state.users.map((u) =>
-          u?.id === action.userId ? { ...u, ...action.data, id: u.id } : u,
-        ),
+        users: state.users.map((u) => {
+          const targetId = (u as any)?.subject_id || u?.id;
+          return targetId === action.userId ? { ...u, ...action.data, id: u.id } : u;
+        }),
       };
 
     case 'HYDRATE_USERS': {
-      // Replace the roster with the live set of registered members from the
-      // database. The signed-in member is kept from local state (not the DB
-      // copy) so an in-flight profile edit or a just-completed onboarding is
-      // never clobbered by a background refresh.
+      // Normalize users payload so subject_id maps cleanly to id
+      const normalizedUsers = action.users.map((u) => ({
+        ...u,
+        id: (u as any)?.subject_id || u?.id,
+      }));
+
       const me = state.users.find((u) => u?.id === state.currentUserId);
-      const usersById = new Map(action.users.filter((user) => user?.id).map((user) => [user.id, user]));
+      const usersById = new Map(
+        normalizedUsers.filter((user) => user?.id).map((user) => [user.id, user])
+      );
       if (me) usersById.set(me.id, { ...usersById.get(me.id), ...me });
       return { ...state, users: [...usersById.values()], usersLoading: false };
     }
@@ -155,8 +176,6 @@ export function reducer(state: AppState, action: Action): AppState {
         postsLoading: false,
         postsLoadingMore: false,
         postsHasMore: action.hasMore ?? state.postsHasMore,
-        // Remember this space's feed so returning to it is instant. Only cache
-        // when a key is supplied (a real fetch), not when replaying the cache.
         postsCache: action.cacheKey
           ? { ...state.postsCache, [action.cacheKey]: action.posts }
           : state.postsCache,
@@ -445,9 +464,13 @@ export function reducer(state: AppState, action: Action): AppState {
 }
 
 function upsertUser(users: User[], user: User): User[] {
-  const exists = users.some((u) => u?.id === user.id);
-  if (exists) return users.map((u) => (u?.id === user.id ? { ...u, ...user } : u));
-  return [...users, user];
+  const userId = (user as any).subject_id || user.id;
+  const exists = users.some((u) => ((u as any)?.subject_id || u?.id) === userId);
+  
+  if (exists) {
+    return users.map((u) => (((u as any)?.subject_id || u?.id) === userId ? { ...u, ...user } : u));
+  }
+  return [...users, { ...user, id: userId }];
 }
 
 function upsertFriendship(
@@ -477,5 +500,4 @@ function upsertFriendship(
   ];
 }
 
-// keep lint happy about unused import path while still re-exporting helpers
 export const selectors = { friendsOf, threadIdFor };
