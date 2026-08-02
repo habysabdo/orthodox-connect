@@ -58,9 +58,6 @@ const GOOGLE_PHOTOS = [
   'https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg',
 ];
 
-// The session is only re-verified this often while the app is being brought back
-// to the foreground, so switching between tabs cannot turn into a stream of
-// requests to the auth endpoint.
 const SESSION_RECHECK_INTERVAL_MS = 60_000;
 const AUTH_RESTORE_TIMEOUT_MS = 12_000;
 
@@ -78,8 +75,6 @@ async function loadSessionUser(): Promise<User | null> {
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
 
-  // Keep a live ref so action callbacks always read the freshest state,
-  // regardless of how the actions memo is memoized.
   const stateRef = useRef(state);
   stateRef.current = state;
   const activeUserIdRef = useRef(state.currentUserId);
@@ -108,17 +103,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       AUTH_RESTORE_TIMEOUT_MS,
     );
 
-    // Initialize netlifyIdentity widget if not initialized
     try {
       netlifyIdentity.init();
     } catch {
-      // Safe fallback if already initialized or running in strict SSR
+      // Safe fallback
     }
 
-    // Everything a signed-out browser has to forget, in one place. The three
-    // ways a session can end — the member logging out, Supabase reporting
-    // SIGNED_OUT, and a refresh coming back 401 — all have to leave the same
-    // clean state behind, or the next login inherits the leftovers.
     const resetToSignedOut = () => {
       activeUserIdRef.current = null;
       pendingPostIdsRef.current.clear();
@@ -129,10 +119,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (window.location.pathname !== '/login') window.location.replace('/login');
     };
 
-    // A session whose refresh was rejected can never repair itself, so sign it
-    // out and wipe the stored keys instead of leaving a dead token in place to
-    // fail the same way on every later request. What the member sees is the
-    // normal login form, ready for a clean sign in.
     const handleExpiredSession = async (reason: string) => {
       await recoverFromUnauthorizedSession(reason);
       if (!active) return;
@@ -148,9 +134,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return;
         }
         if (sessionCheck.status === 'unknown') {
-          // Offline, or the auth endpoint is failing: the token itself may well
-          // be fine, so keep the session and let the automatic background
-          // refresh try again rather than signing anybody out over a bad network.
           console.warn('Could not validate the Supabase session', sessionCheck.error);
         }
         const identity = await restoreIdentitySession();
@@ -175,11 +158,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
 
     const handleLogin = (user: unknown) => {
-      // Automatically close the Netlify Identity widget modal overlay
       try {
         netlifyIdentity.close();
       } catch {
-        // Safe fallback if modal is already closed
+        // Safe fallback
       }
       persistIdentityCookiesFromLocalStorage();
       loadSessionUser()
@@ -188,7 +170,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (sessionUser) {
             dispatch({ type: 'SIGN_IN', user: sessionUser });
           } else if (user) {
-            // Fallback: reload page to ensure cookie synchronization with /api/session
             window.location.reload();
           }
           dispatch({ type: 'AUTH_CHECKED' });
@@ -218,9 +199,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         try {
           if (!active || event === 'TOKEN_REFRESHED') return;
           if (event === 'SIGNED_OUT') {
-            // Supabase also reports SIGNED_OUT when its own background refresh is
-            // rejected, so the stored keys are cleared here as well — synchronously,
-            // before the navigation below can unload the page.
             clearLocalAuthStorage();
             resetToSignedOut();
           }
@@ -237,11 +215,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(authListenerSetupTimeoutId);
     }
 
-    // A phone that has been asleep for days wakes up holding an access token
-    // that expired long ago, and it is the refresh on the first foreground
-    // request that comes back 401. Re-checking when the tab becomes visible
-    // handles that once, here, instead of letting every screen fail its own
-    // request against a session that is already gone.
     let lastSessionCheck = Date.now();
     const revalidateSession = async () => {
       if (!active || document.visibilityState !== 'visible') return;
@@ -280,7 +253,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, [state.authChecked, state.currentUserId, state.postsCache, state.postsHasMoreCache, state.users]);
 
-  // Hydrate the signed-in user's profile from the database
   useEffect(() => {
     const userId = state.currentUserId;
     if (!userId) return;
@@ -404,10 +376,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       } catch (err) {
         console.error('Failed to load posts', err);
+      } finally {
         if (!cancelled && activeUserIdRef.current === userId) {
           dispatch({ type: 'SET_POSTS_LOADING', loading: false });
         }
-      } finally {
         refreshing = false;
       }
     };
@@ -529,9 +501,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         } catch (err) {
           console.error('Failed to sign out via identity', err);
         }
-        // Both sign out calls above can fail against an already-rejected token,
-        // which used to leave the stored session behind and put the member
-        // straight back into the loop they were signing out of.
         clearLocalAuthStorage();
       },
 
