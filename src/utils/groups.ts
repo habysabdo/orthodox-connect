@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { Group } from '../types';
+import type { DiscoverableGroup, Group } from '../types';
 
 export async function loadGroups(): Promise<Group[]> {
   try {
@@ -15,6 +15,43 @@ export async function loadGroups(): Promise<Group[]> {
     }));
   } catch {
     return [];
+  }
+}
+
+export async function discoverGroups(): Promise<DiscoverableGroup[]> {
+  try {
+    const { data, error } = await supabase.from('groups').select('*');
+    if (error || !data) return [];
+
+    return data.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description || '',
+      icon: row.icon || 'Users',
+      membersCount: row.members_count || 1,
+      isMember: false,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function joinGroupRemote(groupId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.rpc('join_group', { group_id_param: groupId });
+    if (error) {
+      // Fallback update if RPC is missing
+      const { data } = await supabase.from('groups').select('members_count').eq('id', groupId).single();
+      if (data) {
+        await supabase
+          .from('groups')
+          .update({ members_count: (data.members_count || 0) + 1 })
+          .eq('id', groupId);
+      }
+    }
+    return true;
+  } catch {
+    return false;
   }
 }
 
