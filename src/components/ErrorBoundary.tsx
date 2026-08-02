@@ -22,8 +22,7 @@ interface State {
 
 /**
  * Catches render-time crashes anywhere in the tree and shows a fallback
- * instead of a blank/black screen. Also logs the error so it surfaces in
- * the console during development.
+ * with detailed error output for easy mobile debugging.
  */
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
@@ -107,7 +106,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
       if (this.props.variant === 'section') {
         return (
-          <div className="card flex min-h-48 flex-col items-center justify-center px-6 py-10 text-center" role="alert">
+          <div className="card flex min-h-48 flex-col items-center justify-center px-4 py-8 text-center" role="alert">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-500/10 text-red-300">
               <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6" aria-hidden="true">
                 <path
@@ -118,13 +117,15 @@ export class ErrorBoundary extends Component<Props, State> {
                 />
               </svg>
             </div>
-            <h2 className="mt-4 font-serif text-lg font-semibold text-ink-100">
-              {this.props.name ?? 'This section'} is temporarily unavailable
+            <h2 className="mt-3 font-serif text-base font-semibold text-ink-100">
+              {this.props.name ?? 'This section'} hit an error
             </h2>
-            <p className="mt-1 max-w-sm text-sm text-ink-400">
-              The rest of Orthodox Connect is still available. Try loading this section again.
-            </p>
-            <button type="button" onClick={this.resetBoundary} className="ghost-btn mt-5">
+            <div className="mt-2 w-full max-w-md rounded-lg border border-red-500/30 bg-red-950/40 p-3 text-left">
+              <p className="font-mono text-xs text-red-300 break-all whitespace-pre-wrap">
+                {this.state.error?.name}: {this.state.error?.message || 'Unknown render error'}
+              </p>
+            </div>
+            <button type="button" onClick={this.resetBoundary} className="ghost-btn mt-4 text-xs">
               Try again
             </button>
           </div>
@@ -132,10 +133,10 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="flex min-h-screen flex-col items-center justify-center bg-ink-950 px-6 text-center">
-          <div className="max-w-md">
-            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/15 text-red-300">
-              <svg viewBox="0 0 24 24" fill="none" className="h-8 w-8">
+        <div className="flex min-h-screen flex-col items-center justify-center bg-ink-950 px-4 py-6 text-center">
+          <div className="w-full max-w-md">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/15 text-red-300">
+              <svg viewBox="0 0 24 24" fill="none" className="h-7 w-7">
                 <path
                   d="M12 2L1 21h22L12 2zm0 6v6m0 3v.5"
                   stroke="currentColor"
@@ -144,18 +145,33 @@ export class ErrorBoundary extends Component<Props, State> {
                 />
               </svg>
             </div>
-            <h1 className="font-serif text-2xl font-semibold text-ink-100">
-              Something went wrong
+            <h1 className="font-serif text-xl font-semibold text-ink-100">
+              {this.props.name ? `${this.props.name} Error` : 'Something went wrong'}
             </h1>
-            <p className="mt-2 text-sm text-ink-400">
-              The app hit an unexpected error. Your account and data are safe.
+            <p className="mt-1 text-xs text-ink-400">
+              The app caught a runtime exception during rendering:
             </p>
-            <div className="mt-6 flex justify-center">
+
+            {/* Error Message Display */}
+            <div className="mt-4 w-full rounded-lg border border-red-500/40 bg-red-950/50 p-3 text-left shadow-inner">
+              <p className="font-mono text-xs font-medium text-red-200 break-all whitespace-pre-wrap">
+                {this.state.error?.name}: {this.state.error?.message || 'No error details captured'}
+              </p>
+            </div>
+
+            <div className="mt-5 flex justify-center gap-3">
+              <button
+                type="button"
+                onClick={this.resetBoundary}
+                className="ghost-btn px-4 py-2 text-xs"
+              >
+                Reset UI
+              </button>
               <button
                 type="button"
                 onClick={this.handleReload}
                 disabled={this.state.isReloading}
-                className="gold-btn px-5 py-2.5"
+                className="gold-btn px-5 py-2 text-xs"
               >
                 {this.state.isReloading ? 'Refreshing…' : 'Reload App'}
               </button>
