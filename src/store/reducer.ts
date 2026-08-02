@@ -71,10 +71,10 @@ export function initialState(): AppState {
   const cached = loadCachedAppState();
   const postsCache = cached?.postsCache ?? {};
   const publicPosts = postsCache[groupCacheKey(null)] ?? [];
-  
+
   // Normalize user ID in case cached user references subject_id
   const cachedUser = cached?.user
-    ? { ...cached.user, id: (cached.user as any).subject_id || cached.user.id }
+    ? { ...cached.user, id: (cached.user as Record<string, unknown>).subject_id as string || cached.user.id }
     : null;
 
   return {
@@ -104,7 +104,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'SIGN_IN': {
       const normalizedUser = {
         ...action.user,
-        id: (action.user as any).subject_id || action.user.id,
+        id: (action.user as Record<string, unknown>).subject_id as string || action.user.id,
       };
       return { 
         ...state, 
@@ -133,7 +133,7 @@ export function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         users: state.users.map((u) => {
-          const targetId = (u as any)?.subject_id || u?.id;
+          const targetId = (u as Record<string, unknown>)?.subject_id as string || u?.id;
           return targetId === action.userId ? { ...u, ...action.data, id: u.id } : u;
         }),
       };
@@ -142,15 +142,22 @@ export function reducer(state: AppState, action: Action): AppState {
       // Normalize users payload so subject_id maps cleanly to id
       const normalizedUsers = action.users.map((u) => ({
         ...u,
-        id: (u as any)?.subject_id || u?.id,
+        id: (u as Record<string, unknown>)?.subject_id as string || u?.id,
       }));
 
       const me = state.users.find((u) => u?.id === state.currentUserId);
-      const usersById = new Map(
-        normalizedUsers.filter((user) => user?.id).map((user) => [user.id, user])
-      );
-      if (me) usersById.set(me.id, { ...usersById.get(me.id), ...me });
-      return { ...state, users: [...usersById.values()], usersLoading: false };
+      const usersById = new Map<string, User>();
+      
+      for (const user of normalizedUsers) {
+        if (user?.id) usersById.set(user.id, user);
+      }
+      
+      if (me) {
+        const existing = usersById.get(me.id);
+        usersById.set(me.id, existing ? { ...existing, ...me } : me);
+      }
+
+      return { ...state, users: Array.from(usersById.values()), usersLoading: false };
     }
 
     case 'HYDRATE_GROUPS':
@@ -226,11 +233,11 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'UPDATE_POST':
       return {
         ...state,
-        posts: state.posts.map((post) => post.id === action.post.id ? action.post : post),
+        posts: state.posts.map((post) => (post.id === action.post.id ? action.post : post)),
         postsCache: Object.fromEntries(
           Object.entries(state.postsCache).map(([key, posts]) => [
             key,
-            posts.map((post) => post.id === action.post.id ? action.post : post),
+            posts.map((post) => (post.id === action.post.id ? action.post : post)),
           ]),
         ),
       };
@@ -277,12 +284,14 @@ export function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         posts,
-        postsCache: Object.fromEntries(Object.entries(state.postsCache).map(([key, cachedPosts]) => [
-          key,
-          key === action.cacheKey
-            ? [action.post, ...cachedPosts.map(updateShareCount).filter((post) => post.id !== action.post.id)]
-            : cachedPosts.map(updateShareCount),
-        ])),
+        postsCache: Object.fromEntries(
+          Object.entries(state.postsCache).map(([key, cachedPosts]) => [
+            key,
+            key === action.cacheKey
+              ? [action.post, ...cachedPosts.map(updateShareCount).filter((post) => post.id !== action.post.id)]
+              : cachedPosts.map(updateShareCount),
+          ]),
+        ),
       };
     }
 
@@ -375,11 +384,11 @@ export function reducer(state: AppState, action: Action): AppState {
           t.id === action.threadId
             ? {
                 ...t,
-                messages: t.messages.map((m) => (
+                messages: t.messages.map((m) =>
                   m.senderId !== action.userId && !m.isRead
                     ? { ...m, isRead: true, readAt: action.readAt }
-                    : m
-                )),
+                    : m,
+                ),
               }
             : t,
         ),
@@ -464,11 +473,11 @@ export function reducer(state: AppState, action: Action): AppState {
 }
 
 function upsertUser(users: User[], user: User): User[] {
-  const userId = (user as any).subject_id || user.id;
-  const exists = users.some((u) => ((u as any)?.subject_id || u?.id) === userId);
-  
+  const userId = (user as Record<string, unknown>).subject_id as string || user.id;
+  const exists = users.some((u) => ((u as Record<string, unknown>)?.subject_id as string || u?.id) === userId);
+
   if (exists) {
-    return users.map((u) => (((u as any)?.subject_id || u?.id) === userId ? { ...u, ...user } : u));
+    return users.map((u) => (((u as Record<string, unknown>)?.subject_id as string || u?.id) === userId ? { ...u, ...user } : u));
   }
   return [...users, { ...user, id: userId }];
 }
