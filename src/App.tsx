@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { StoreProvider } from "./store/StoreProvider"; // 👈 ADDED STORE PROVIDER
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./components/Login";
 import { AppShell } from "./components/AppShell";
@@ -47,32 +48,34 @@ function LandingRoute() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Root app with router + auth provider                              */
+/*  Root app with router + auth provider + store provider             */
 /* ------------------------------------------------------------------ */
 
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Public */}
-          <Route path="/" element={<LandingRoute />} />
-          <Route path="/login" element={<LoginRoute />} />
+      <StoreProvider> {/* 👈 WRAPPED WITH STORE PROVIDER */}
+        <BrowserRouter>
+          <Routes>
+            {/* Public */}
+            <Route path="/" element={<LandingRoute />} />
+            <Route path="/login" element={<LoginRoute />} />
 
-          {/* Protected App Shell (Sidebars, Feed, Video, Modals) */}
-          <Route
-            path="/feed"
-            element={
-              <ProtectedRoute>
-                <AppShell />
-              </ProtectedRoute>
-            }
-          />
+            {/* Protected App Shell */}
+            <Route
+              path="/feed"
+              element={
+                <ProtectedRoute>
+                  <AppShell />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/feed" replace />} />
-        </Routes>
-      </BrowserRouter>
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/feed" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </StoreProvider>
     </AuthProvider>
   );
 }
