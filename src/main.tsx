@@ -46,15 +46,19 @@ createRoot(document.getElementById('root')!).render(
 
 resetAutomaticReloadGuard();
 
-// Register the service worker for offline caching and PWA installability.
+// Automatically unregister service workers and purge caches to prevent stale asset hashes
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    try {
-      void navigator.serviceWorker.register('/sw.js').catch((error) => {
-        console.warn('Service worker registration was skipped.', error);
-      });
-    } catch (error) {
-      console.warn('Service workers are unavailable in this browser.', error);
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const registration of registrations) {
+      registration.unregister();
+    }
+  });
+}
+
+if ('caches' in window) {
+  caches.keys().then((names) => {
+    for (const name of names) {
+      caches.delete(name);
     }
   });
 }
