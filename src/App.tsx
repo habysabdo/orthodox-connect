@@ -1,8 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import { ProtectedRoute } from "./components/ProtectedRoute";
-import { Login } from "./components/Login";
-import { NotificationPrompt } from "./components/NotificationPrompt";
+import ProtectedRoute from "./components/ProtectedRoute";
+import Login from "./components/Login";
+import NotificationPrompt from "./components/NotificationPrompt";
 import { PostCard, type Post } from "./components/PostCard";
 
 /**
@@ -16,7 +16,7 @@ import { PostCard, type Post } from "./components/PostCard";
  */
 
 /* ------------------------------------------------------------------ */
-/*  Example feed page (replace with your real component)               */
+/*  Example feed page                                                 */
 /* ------------------------------------------------------------------ */
 
 const SAMPLE_POSTS: Post[] = [
@@ -87,7 +87,7 @@ function LoginRoute() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Root app with router + auth provider                                */
+/*  Root app with router + auth provider                              */
 /* ------------------------------------------------------------------ */
 
 export default function App() {
