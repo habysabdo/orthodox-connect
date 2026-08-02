@@ -12,15 +12,42 @@ export function Login() {
     setLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-    if (error) {
-      setError(error.message);
+      if (error) {
+        console.error('Supabase auth error:', error);
+        setError(error.message);
+        setLoading(false);
+        return;
+      }
+
+      // Check if user is authenticated and attempt profile fetch if needed
+      if (data.user) {
+        console.log('Auth successful for user ID:', data.user.id);
+        
+        // Optional: Check if profile exists using subject_id
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('subject_id', data.user.id)
+          .maybeSingle();
+
+        if (profileError) {
+          console.error('Profile fetch error after auth:', profileError);
+          // If RLS or column error happens here, show it clearly
+          setError(`Auth succeeded, but profile query failed: ${profileError.message}`);
+        }
+      }
+    } catch (err: any) {
+      console.error('Unexpected login exception:', err);
+      setError(err.message || 'An unexpected error occurred.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
