@@ -32,6 +32,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-easy-crop": "^5.5.7",
+    "react-router-dom": "^7.18.2",
     "regenerator-runtime": "^0.14.1",
     "tus-js-client": "^4.3.1",
     "web-push": "^3.6.7",
