@@ -1,18 +1,26 @@
+import { supabase } from '../lib/supabase';
 import type { User } from '../types';
-import { apiUrl } from '../lib/config';
-import { normalizeUsers } from './postSafety';
 
-export const SUPER_ADMIN_EMAIL = 'lucasautocode@gmail.com';
-
-export function hasAdminAccess(user: Pick<User, 'email' | 'role'> | null | undefined): boolean {
-  const profile = user;
-  return user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL || profile?.role === 'admin';
+export function hasAdminAccess(user?: User | null): boolean {
+  if (!user) return false;
+  return user.role === 'admin' || user.role === 'global_admin';
 }
 
-// Load every registered member from the database (profiles saved during
-// onboarding). Used by the admin panel to show the live community roster.
 export async function loadUsers(): Promise<User[]> {
-  const res = await fetch(apiUrl('/api/users'));
-  if (!res.ok) throw new Error('Failed to load users');
-  return normalizeUsers(await res.json());
+  try {
+    const { data, error } = await supabase.from('profiles').select('*');
+    if (error || !data) return [];
+
+    return data.map((row: any) => ({
+      id: row.id,
+      name: row.name || row.email?.split('@')[0] || 'Member',
+      email: row.email || '',
+      avatarUrl: row.avatar_url || '',
+      role: row.role || 'user',
+      status: 'online',
+      onboarded: row.onboarded ?? true,
+    }));
+  } catch {
+    return [];
+  }
 }
