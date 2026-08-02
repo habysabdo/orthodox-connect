@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-
 import { SUPABASE_ANON_KEY, SUPABASE_URL, hasSupabaseConfig } from './config';
 
 if (!hasSupabaseConfig) {
@@ -14,20 +13,15 @@ if (!hasSupabaseConfig) {
 // When the config is missing or malformed, fall back to a syntactically valid
 // placeholder URL/key. This keeps createClient from throwing at module load, so
 // the app still renders; auth calls simply return errors instead of crashing.
-// When a custom regional domain/proxy is configured it is preferred (resolved in
-// ./config), so both auth and Storage bucket fetches follow the configured DNS
-// route rather than a hardcoded project endpoint.
 const clientUrl = hasSupabaseConfig ? (SUPABASE_URL as string) : 'https://placeholder.supabase.co';
 const clientAnonKey = hasSupabaseConfig ? SUPABASE_ANON_KEY : 'public-anon-key';
 
-// A single shared browser client. Keep these auth options explicit because the
-// app runs in browsers, Netlify deploy previews, and Capacitor WebViews where
-// implicit defaults have historically produced inconsistent session restores.
+// A single shared browser client. Supabase automatically defaults to localStorage 
+// in browser environments.
 export const supabase = createClient(clientUrl, clientAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: false,
-    storage: window.localStorage,
   },
 });
