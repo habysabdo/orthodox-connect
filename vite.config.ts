@@ -7,6 +7,12 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: 'dist',
+    rollupOptions: {
+      output: {
+        // Disables creating separate lazy chunk files that get blocked by Cloudflare Pages SPA routes
+        manualChunks: undefined,
+      },
+    },
   },
   resolve: {
     alias: {
