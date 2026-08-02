@@ -1,3 +1,4 @@
+
 import { Menu, Radio, Users, Video } from 'lucide-react';
 import { Avatar, FeedSkeleton, Logo } from './ui';
 import { useStore } from '@/store/context';
@@ -9,25 +10,44 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { hasAdminAccess } from '@/utils/users';
 import { ErrorBoundary } from './ErrorBoundary';
 
-const FeedView = lazy(() => import('./FeedView').then((m) => ({ default: m.FeedView })));
-const GroupFeedView = lazy(() => import('./GroupFeedView').then((m) => ({ default: m.GroupFeedView })));
-const GroupsView = lazy(() => import('./GroupsView').then((m) => ({ default: m.GroupsView })));
-const NetworkView = lazy(() => import('./NetworkView').then((m) => ({ default: m.NetworkView })));
-const MessengerView = lazy(() => import('./MessengerView').then((m) => ({ default: m.MessengerView })));
-const CalendarView = lazy(() => import('./CalendarView').then((m) => ({ default: m.CalendarView })));
-const AdminView = lazy(() => import('./AdminView').then((m) => ({ default: m.AdminView })));
-const ProfileView = lazy(() => import('./ProfileView').then((m) => ({ default: m.ProfileView })));
-const ReelsView = lazy(() => import('./ReelsView').then((m) => ({ default: m.ReelsView })));
-const MeetingView = lazy(() => import('./MeetingView').then((m) => ({ default: m.MeetingView })));
-const GoLiveModal = lazy(() => import('./GoLiveModal').then((m) => ({ default: m.GoLiveModal })));
-const StreamViewer = lazy(() => import('./StreamViewer').then((m) => ({ default: m.StreamViewer })));
-const ShareModal = lazy(() => import('./ShareModal').then((m) => ({ default: m.ShareModal })));
-const GlobalSearch = lazy(() => import('./GlobalSearch').then((m) => ({ default: m.GlobalSearch })));
-const LeftSidebar = lazy(() => import('./LeftSidebar').then((m) => ({ default: m.LeftSidebar })));
-const RightSidebar = lazy(() => import('./RightSidebar').then((m) => ({ default: m.RightSidebar })));
-const PrayerMeetingModal = lazy(() => import('./PrayerMeetingModal').then((m) => ({ default: m.PrayerMeetingModal })));
-const InstallPrompt = lazy(() => import('./InstallPrompt').then((m) => ({ default: m.InstallPrompt })));
-const NotificationToasts = lazy(() => import('./NotificationToasts').then((m) => ({ default: m.NotificationToasts })));
+// Helper function to auto-retry failed lazy chunk loads once on deployment updates
+const lazyWithRetry = (componentImport: () => Promise<any>) =>
+  lazy(async () => {
+    const pageHasAlreadyBeenForceRefreshed = JSON.parse(
+      window.sessionStorage.getItem('page_has_been_refreshed') || 'false'
+    );
+
+    try {
+      return await componentImport();
+    } catch (error) {
+      if (!pageHasAlreadyBeenForceRefreshed) {
+        window.sessionStorage.setItem('page_has_been_refreshed', 'true');
+        window.location.reload();
+        return { default: () => null };
+      }
+      throw error;
+    }
+  });
+
+const FeedView = lazyWithRetry(() => import('./FeedView').then((m) => ({ default: m.FeedView })));
+const GroupFeedView = lazyWithRetry(() => import('./GroupFeedView').then((m) => ({ default: m.GroupFeedView })));
+const GroupsView = lazyWithRetry(() => import('./GroupsView').then((m) => ({ default: m.GroupsView })));
+const NetworkView = lazyWithRetry(() => import('./NetworkView').then((m) => ({ default: m.NetworkView })));
+const MessengerView = lazyWithRetry(() => import('./MessengerView').then((m) => ({ default: m.MessengerView })));
+const CalendarView = lazyWithRetry(() => import('./CalendarView').then((m) => ({ default: m.CalendarView })));
+const AdminView = lazyWithRetry(() => import('./AdminView').then((m) => ({ default: m.AdminView })));
+const ProfileView = lazyWithRetry(() => import('./ProfileView').then((m) => ({ default: m.ProfileView })));
+const ReelsView = lazyWithRetry(() => import('./ReelsView').then((m) => ({ default: m.ReelsView })));
+const MeetingView = lazyWithRetry(() => import('./MeetingView').then((m) => ({ default: m.MeetingView })));
+const GoLiveModal = lazyWithRetry(() => import('./GoLiveModal').then((m) => ({ default: m.GoLiveModal })));
+const StreamViewer = lazyWithRetry(() => import('./StreamViewer').then((m) => ({ default: m.StreamViewer })));
+const ShareModal = lazyWithRetry(() => import('./ShareModal').then((m) => ({ default: m.ShareModal })));
+const GlobalSearch = lazyWithRetry(() => import('./GlobalSearch').then((m) => ({ default: m.GlobalSearch })));
+const LeftSidebar = lazyWithRetry(() => import('./LeftSidebar').then((m) => ({ default: m.LeftSidebar })));
+const RightSidebar = lazyWithRetry(() => import('./RightSidebar').then((m) => ({ default: m.RightSidebar })));
+const PrayerMeetingModal = lazyWithRetry(() => import('./PrayerMeetingModal').then((m) => ({ default: m.PrayerMeetingModal })));
+const InstallPrompt = lazyWithRetry(() => import('./InstallPrompt').then((m) => ({ default: m.InstallPrompt })));
+const NotificationToasts = lazyWithRetry(() => import('./NotificationToasts').then((m) => ({ default: m.NotificationToasts })));
 
 export function AppShell() {
   const { users, currentUserId, groups, groupsLoading, activeGroupId, setActiveGroup } = useStore();
