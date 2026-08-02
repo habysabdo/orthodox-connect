@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { Composer } from './Composer';
 import { PostCard } from './PostCard';
+import { DailySaintBanner } from './DailySaintBanner';
+import { StoriesBar } from './StoriesBar';
 import { useStore } from '@/store/context';
 import { useUI } from '@/store/ui';
 import { CommunityAlerts } from './CommunityAlerts';
@@ -34,6 +36,8 @@ export function FeedView() {
 
   return (
     <div className="space-y-4">
+      <DailySaintBanner />
+      <StoriesBar />
       <CommunityAlerts alerts={alerts} />
 
       {/* Hero Go Live banner */}

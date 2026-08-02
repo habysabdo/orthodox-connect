@@ -5,18 +5,22 @@ export type ViewKey = 'feed' | 'reels' | 'network' | 'messenger' | 'calendar' | 
 interface UIState {
   view: ViewKey;
   setView: (v: ViewKey) => void;
-  /** open a live stream viewer by id */
   openStreamId: string | null;
   setOpenStreamId: (id: string | null) => void;
-  /** open the Go Live creator */
   goLiveOpen: boolean;
   setGoLiveOpen: (v: boolean) => void;
-  /** open a DM thread from anywhere */
   openThreadId: string | null;
   setOpenThreadId: (id: string | null) => void;
-  /** right sidebar collapsed on small screens */
   rightOpen: boolean;
   setRightOpen: (v: boolean) => void;
+  /** video upload modal */
+  uploadOpen: boolean;
+  setUploadOpen: (v: boolean) => void;
+  /** video call modal */
+  callPeerId: string | null;
+  setCallPeerId: (id: string | null) => void;
+  callGroupLabel: string | null;
+  setCallGroupLabel: (label: string | null) => void;
 }
 
 const UICtx = createContext<UIState | null>(null);
@@ -27,6 +31,9 @@ export function UIProvider({ children }: { children: ReactNode }) {
   const [goLiveOpen, setGoLiveOpen] = useState(false);
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [rightOpen, setRightOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [callPeerId, setCallPeerId] = useState<string | null>(null);
+  const [callGroupLabel, setCallGroupLabel] = useState<string | null>(null);
 
   return (
     <UICtx.Provider
@@ -41,6 +48,12 @@ export function UIProvider({ children }: { children: ReactNode }) {
         setOpenThreadId,
         rightOpen,
         setRightOpen,
+        uploadOpen,
+        setUploadOpen,
+        callPeerId,
+        setCallPeerId,
+        callGroupLabel,
+        setCallGroupLabel,
       }}
     >
       {children}

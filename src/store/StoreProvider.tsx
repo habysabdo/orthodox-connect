@@ -61,6 +61,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           joinedAt: Date.now(),
           onboarded: false,
           online: true,
+          following: [],
+          followers: [],
+        };
+        dispatch({ type: 'SIGN_IN', user: newUser });
+        return newUser;
+      },
+
+      signInWithEmail({ email, name, photo, role }) {
+        const current = stateRef.current;
+        const existing = current.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+        const resolvedRole = role ?? (email.toLowerCase() === ADMIN_EMAIL ? 'admin' : 'member');
+        if (existing) {
+          const merged: User = {
+            ...existing,
+            role: resolvedRole === 'admin' ? 'admin' : existing.role,
+            photo: existing.onboarded ? existing.photo : photo,
+            name: existing.onboarded ? existing.name : name,
+            online: true,
+          };
+          dispatch({ type: 'SIGN_IN', user: merged });
+          return merged;
+        }
+        const newUser: User = {
+          id: uid('u'),
+          email,
+          name,
+          age: 0,
+          photo,
+          parish: '',
+          role: resolvedRole,
+          joinedAt: Date.now(),
+          onboarded: false,
+          online: true,
+          following: [],
+          followers: [],
         };
         dispatch({ type: 'SIGN_IN', user: newUser });
         return newUser;
@@ -129,6 +164,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const me = getCurrent();
         if (!me) return;
         dispatch({ type: 'REMOVE_FRIEND', a: me.id, b: otherId });
+      },
+
+      follow(targetId) {
+        const me = getCurrent();
+        if (!me) return;
+        dispatch({ type: 'FOLLOW', followerId: me.id, targetId });
+      },
+      unfollow(targetId) {
+        const me = getCurrent();
+        if (!me) return;
+        dispatch({ type: 'UNFOLLOW', followerId: me.id, targetId });
+      },
+      isFollowing(targetId) {
+        const me = getCurrent();
+        if (!me) return false;
+        return me.following.includes(targetId);
       },
 
       sendMessage(threadId, text) {

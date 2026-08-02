@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { MessageCircle, Send } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ImagePlus, MessageCircle, Mic, Phone, Send, Trash2, Video } from 'lucide-react';
 import { Avatar, EmptyState } from './ui';
 import { useStore, friendsOf, threadIdFor, unreadCountFor } from '@/store/context';
 import type { ChatMessage } from '@/types';
@@ -8,15 +9,16 @@ import { clockTime, timeAgo } from '@/utils/format';
 
 export function MessengerView() {
   const state = useStore();
-  const { openThreadId, setOpenThreadId } = useUI();
+  const { openThreadId, setOpenThreadId, setCallPeerId, setCallGroupLabel } = useUI();
   const me = state.users.find((u) => u.id === state.currentUserId);
   const [draft, setDraft] = useState('');
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const friends = friendsOf(state, me?.id ?? '');
   const myThreads = state.threads.filter((t) => me && t.participantIds.includes(me.id));
 
-  // Build a list of conversations: friends with a thread + friends without
   const conversations = friends.map((f) => {
     const tid = threadIdFor(me!.id, f.id);
     const thread = state.threads.find((t) => t.id === tid);
@@ -48,6 +50,27 @@ export function MessengerView() {
     setDraft('');
   };
 
+  const sendMedia = (mediaUrl: string) => {
+    if (!activeThread) return;
+    state.sendMessage(activeThread.id, `[photo] ${mediaUrl}`);
+    setMediaPreview(null);
+  };
+
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = reader.result as string;
+      if (activeThread) {
+        sendMedia(url);
+      } else {
+        setMediaPreview(url);
+      }
+    };
+    reader.readAsDataURL(f);
+  };
+
   const openConv = (tid: string, friendId: string) => {
     if (!state.threads.some((t) => t.id === tid)) {
       const newId = state.openThreadWith(friendId);
@@ -56,6 +79,9 @@ export function MessengerView() {
       setOpenThreadId(tid);
     }
   };
+
+  const isMediaMessage = (text: string) => text.startsWith('[photo] ');
+  const getMediaUrl = (text: string) => text.replace('[photo] ', '');
 
   return (
     <div className="card flex h-[calc(100vh-7rem)] overflow-hidden">
@@ -88,7 +114,11 @@ export function MessengerView() {
                     {last && <span className="shrink-0 text-[10px] text-ink-400">{timeAgo(last.createdAt)}</span>}
                   </div>
                   <div className={`truncate text-xs ${unread ? 'font-semibold text-gold-200' : 'text-ink-400'}`}>
-                    {last ? (last.senderId === me.id ? 'You: ' : '') + last.text : 'Start the conversation'}
+                    {last
+                      ? isMediaMessage(last.text)
+                        ? (last.senderId === me.id ? 'You: ' : '') + 'Sent a photo'
+                        : (last.senderId === me.id ? 'You: ' : '') + last.text
+                      : 'Start the conversation'}
                   </div>
                 </div>
                 {unread > 0 && (
@@ -119,54 +149,118 @@ export function MessengerView() {
                 </span>
               </div>
             </div>
+            <button
+              onClick={() => { setCallPeerId(activeFriend.id); setCallGroupLabel(`Call with ${activeFriend.name}`); }}
+              className="rounded-full p-2 text-ink-300 transition-colors hover:bg-ink-800 hover:text-gold-200"
+              title="Audio call"
+            >
+              <Phone size={18} />
+            </button>
+            <button
+              onClick={() => { setCallPeerId(activeFriend.id); setCallGroupLabel(`Video call with ${activeFriend.name}`); }}
+              className="rounded-full p-2 text-ink-300 transition-colors hover:bg-ink-800 hover:text-gold-200"
+              title="Video call"
+            >
+              <Video size={18} />
+            </button>
           </div>
 
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto scrollbar-thin p-4">
             <div className="mx-auto w-fit rounded-full bg-ink-800 px-3 py-1 text-[10px] text-ink-400">
               {activeFriend.parish}
             </div>
-            {activeThread.messages.map((m: ChatMessage) => {
-              const mine = m.senderId === me.id;
-              return (
-                <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`flex max-w-[75%] gap-2 ${mine ? 'flex-row-reverse' : ''}`}>
-                    {!mine && <Avatar src={activeFriend.photo} name={activeFriend.name} size={28} />}
-                    <div>
-                      <div
-                        className={`rounded-2xl px-3.5 py-2 text-sm ${
-                          mine
-                            ? 'rounded-tr-sm bg-gradient-to-br from-gold-400 to-gold-500 text-ink-950'
-                            : 'rounded-tl-sm bg-ink-800 text-ink-100'
-                        }`}
-                      >
-                        {m.text}
-                      </div>
-                      <div className={`mt-0.5 text-[10px] text-ink-400 ${mine ? 'text-right' : ''}`}>
-                        {clockTime(m.createdAt)}
+            <AnimatePresence initial={false}>
+              {activeThread.messages.map((m: ChatMessage) => {
+                const mine = m.senderId === me.id;
+                const media = isMediaMessage(m.text);
+                return (
+                  <motion.div
+                    key={m.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className={`flex ${mine ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div className={`flex max-w-[75%] gap-2 ${mine ? 'flex-row-reverse' : ''}`}>
+                      {!mine && <Avatar src={activeFriend.photo} name={activeFriend.name} size={28} />}
+                      <div>
+                        {media ? (
+                          <div className="overflow-hidden rounded-2xl">
+                            <img
+                              src={getMediaUrl(m.text)}
+                              alt="Shared media"
+                              className="max-h-60 w-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                          </div>
+                        ) : (
+                          <div
+                            className={`rounded-2xl px-3.5 py-2 text-sm ${
+                              mine
+                                ? 'rounded-tr-sm bg-gradient-to-br from-gold-400 to-gold-500 text-ink-950'
+                                : 'rounded-tl-sm bg-ink-800 text-ink-100'
+                            }`}
+                          >
+                            {m.text}
+                          </div>
+                        )}
+                        <div className={`mt-0.5 text-[10px] text-ink-400 ${mine ? 'text-right' : ''}`}>
+                          {clockTime(m.createdAt)}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              );
-            })}
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
             {activeThread.messages.length === 0 && (
               <div className="flex flex-col items-center justify-center py-12 text-center text-sm text-ink-400">
-                Say hello to {activeFriend.name.split(' ')[0]} 👋
+                Say hello to {activeFriend.name.split(' ')[0]}
               </div>
             )}
           </div>
 
+          {/* Media preview */}
+          {mediaPreview && (
+            <div className="border-t border-ink-700 p-2">
+              <div className="relative inline-block">
+                <img src={mediaPreview} alt="" className="h-20 rounded-lg object-cover" />
+                <button
+                  onClick={() => setMediaPreview(null)}
+                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-maroon-600 text-white"
+                >
+                  <Trash2 size={11} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Input bar */}
           <div className="flex items-center gap-2 border-t border-ink-700 p-3">
+            <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="hidden" />
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="rounded-full p-2.5 text-ink-300 transition-colors hover:bg-ink-800 hover:text-gold-200"
+              title="Send photo"
+            >
+              <ImagePlus size={18} />
+            </button>
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && send()}
-              placeholder="Type a message…"
+              placeholder="Type a message..."
               className="input flex-1"
             />
-            <button onClick={send} disabled={!draft.trim()} className="gold-btn px-3 py-2.5">
+            <VoiceRecorder onSend={(voiceUrl) => state.sendMessage(activeThread.id, `[voice] ${voiceUrl}`)} />
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={send}
+              disabled={!draft.trim()}
+              className="gold-btn px-3 py-2.5"
+            >
               <Send size={16} />
-            </button>
+            </motion.button>
           </div>
         </div>
       ) : (
@@ -179,5 +273,52 @@ export function MessengerView() {
         </div>
       )}
     </div>
+  );
+}
+
+function VoiceRecorder({ onSend }: { onSend: (voiceUrl: string) => void }) {
+  const [recording, setRecording] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const start = () => {
+    setRecording(true);
+    setSeconds(0);
+    timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
+  };
+
+  const stop = () => {
+    setRecording(false);
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (seconds > 0) {
+      onSend(`Voice message (${seconds}s)`);
+    }
+    setSeconds(0);
+  };
+
+  if (recording) {
+    return (
+      <motion.button
+        initial={{ scale: 0.9 }}
+        animate={{ scale: 1 }}
+        onClick={stop}
+        className="flex items-center gap-2 rounded-full bg-maroon-600/20 px-3 py-2.5 text-maroon-300"
+      >
+        <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-maroon-500" />
+        <span className="font-mono text-xs">{String(Math.floor(seconds / 60)).padStart(2, '0')}:{String(seconds % 60).padStart(2, '0')}</span>
+        <span className="text-xs">Stop</span>
+      </motion.button>
+    );
+  }
+
+  return (
+    <motion.button
+      whileTap={{ scale: 0.9 }}
+      onClick={start}
+      className="rounded-full p-2.5 text-ink-300 transition-colors hover:bg-ink-800 hover:text-gold-200"
+      title="Record voice message"
+    >
+      <Mic size={18} />
+    </motion.button>
   );
 }

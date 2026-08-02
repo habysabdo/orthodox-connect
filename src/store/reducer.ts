@@ -37,6 +37,8 @@ export type Action =
   | { type: 'FLAG_POST'; postId: string; reason: string }
   | { type: 'UNFLAG_POST'; postId: string }
   | { type: 'DELETE_POST'; postId: string }
+  | { type: 'FOLLOW'; followerId: string; targetId: string }
+  | { type: 'UNFOLLOW'; followerId: string; targetId: string }
   | { type: 'ADD_FRIEND'; from: string; to: string }
   | { type: 'ACCEPT_FRIEND'; from: string; to: string }
   | { type: 'REMOVE_FRIEND'; a: string; b: string }
@@ -133,6 +135,37 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'DELETE_POST':
       return { ...state, posts: state.posts.filter((p) => p.id !== action.postId) };
+
+    case 'FOLLOW': {
+      if (action.followerId === action.targetId) return state;
+      return {
+        ...state,
+        users: state.users.map((u) => {
+          if (u.id === action.followerId && !u.following.includes(action.targetId)) {
+            return { ...u, following: [...u.following, action.targetId] };
+          }
+          if (u.id === action.targetId && !u.followers.includes(action.followerId)) {
+            return { ...u, followers: [...u.followers, action.followerId] };
+          }
+          return u;
+        }),
+      };
+    }
+
+    case 'UNFOLLOW': {
+      return {
+        ...state,
+        users: state.users.map((u) => {
+          if (u.id === action.followerId) {
+            return { ...u, following: u.following.filter((id) => id !== action.targetId) };
+          }
+          if (u.id === action.targetId) {
+            return { ...u, followers: u.followers.filter((id) => id !== action.followerId) };
+          }
+          return u;
+        }),
+      };
+    }
 
     case 'ADD_FRIEND':
       return { ...state, friendships: upsertFriendship(state.friendships, action.from, action.to, 'outgoing') };

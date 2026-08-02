@@ -1,5 +1,7 @@
 import { StoreProvider, useStore } from './store/StoreProvider';
 import { UIProvider } from './store/ui';
+import { ThemeProvider } from './store/theme';
+import { I18nProvider } from './store/i18n';
 import { Landing } from './components/Landing';
 import { Onboarding } from './components/Onboarding';
 import { AppShell } from './components/AppShell';
@@ -10,27 +12,28 @@ function Gate() {
   const me = users.find((u) => u.id === currentUserId);
 
   if (!me) {
-    console.log('[Gate] No current user → Landing');
     return <Landing />;
   }
   if (!me.onboarded) {
-    console.log('[Gate] User not onboarded → Onboarding', me.email);
     return <Onboarding />;
   }
-  console.log('[Gate] User ready → AppShell', me.email);
   return <AppShell />;
 }
 
 export default function App() {
   return (
     <ErrorBoundary>
-      <StoreProvider>
-        <UIProvider>
-          <ErrorBoundary>
-            <Gate />
-          </ErrorBoundary>
-        </UIProvider>
-      </StoreProvider>
+      <ThemeProvider>
+        <I18nProvider>
+          <StoreProvider>
+            <UIProvider>
+              <ErrorBoundary>
+                <Gate />
+              </ErrorBoundary>
+            </UIProvider>
+          </StoreProvider>
+        </I18nProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }

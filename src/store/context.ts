@@ -24,6 +24,7 @@ export interface AppState {
 export interface AppActions {
   // auth
   signInWithGoogle: (info: { email: string; name: string; photo: string }) => User;
+  signInWithEmail: (info: { email: string; name: string; photo: string; role?: 'admin' | 'member' }) => User;
   completeOnboarding: (data: { name: string; age: number; photo: string; parish: string }) => void;
   signOut: () => void;
 
@@ -35,7 +36,12 @@ export interface AppActions {
   unflagPost: (postId: string) => void;
   deletePost: (postId: string) => void;
 
-  // friendships
+  // follow
+  follow: (targetId: string) => void;
+  unfollow: (targetId: string) => void;
+  isFollowing: (targetId: string) => boolean;
+
+  // friendships (legacy)
   addFriend: (otherId: string) => void;
   acceptFriend: (otherId: string) => void;
   removeFriend: (otherId: string) => void;
@@ -84,9 +90,11 @@ export function getUser(state: AppState, id: string | null): User | undefined {
 }
 
 export function friendsOf(state: AppState, userId: string): User[] {
-  return state.friendships
-    .filter((f) => f.status === 'accepted' && (f.a === userId || f.b === userId))
-    .map((f) => (f.a === userId ? f.b : f.a))
+  const user = state.users.find((u) => u.id === userId);
+  if (!user) return [];
+  // Mutual follows = friends
+  return user.following
+    .filter((id) => user.followers.includes(id))
     .map((id) => state.users.find((u) => u.id === id))
     .filter((u): u is User => Boolean(u));
 }
@@ -108,3 +116,6 @@ export function unreadCountFor(state: AppState, userId: string): number {
     return sum + t.messages.filter((m: ChatMessage) => m.senderId !== userId && !m.read).length;
   }, 0);
 }
+
+// Re-exported from StoreProvider for convenience
+export { pickGooglePhoto } from './StoreProvider';

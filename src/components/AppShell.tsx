@@ -1,4 +1,4 @@
-import { Menu, MessageCircle, Radio, Users } from 'lucide-react';
+import { Menu, MessageCircle, Radio, Users, Languages } from 'lucide-react';
 import { Avatar, Logo } from './ui';
 import { LeftSidebar } from './LeftSidebar';
 import { RightSidebar } from './RightSidebar';
@@ -11,22 +11,26 @@ import { AdminView } from './AdminView';
 import { ProfileView } from './ProfileView';
 import { GoLiveModal } from './GoLiveModal';
 import { StreamViewer } from './StreamViewer';
+import { VideoUploadModal } from './VideoUploadModal';
+import { VideoCallModal } from './VideoCallModal';
 import { useStore } from '@/store/context';
 import { useUI } from '@/store/ui';
+import { useI18n } from '@/store/i18n';
 import { useState } from 'react';
 
 export function AppShell() {
   const { users, currentUserId } = useStore();
-  const { view, setView, setGoLiveOpen, rightOpen, setRightOpen } = useUI();
+  const { view, setView, setGoLiveOpen, rightOpen, setRightOpen, uploadOpen, setUploadOpen, callPeerId, setCallPeerId, callGroupLabel } = useUI();
+  const { lang, setLang } = useI18n();
   const me = users.find((u) => u.id === currentUserId);
   const [leftOpen, setLeftOpen] = useState(false);
 
   if (!me) return null;
 
   return (
-    <div className="min-h-screen bg-ink-950 text-ink-100">
+    <div className="min-h-screen text-ink-100" style={{ backgroundColor: 'var(--bg-base)' }}>
       {/* Top bar */}
-      <header className="sticky top-0 z-30 border-b border-ink-800 bg-ink-950/85 backdrop-blur-md">
+      <header className="sticky top-0 z-30 backdrop-blur-md" style={{ borderBottom: '1px solid var(--border-base)', backgroundColor: 'color-mix(in srgb, var(--bg-base) 85%, transparent)' }}>
         <div className="mx-auto flex h-14 max-w-[1500px] items-center gap-3 px-3 sm:px-4">
           <button
             onClick={() => setLeftOpen(true)}
@@ -47,9 +51,19 @@ export function AppShell() {
           {/* Mobile quick nav */}
           <div className="flex items-center gap-1 lg:hidden">
             <NavBtn active={view === 'feed'} onClick={() => setView('feed')} icon={<Radio size={18} />} />
+            <NavBtn active={view === 'reels'} onClick={() => setView('reels')} icon={<MessageCircle size={18} />} />
             <NavBtn active={view === 'network'} onClick={() => setView('network')} icon={<Users size={18} />} />
-            <NavBtn active={view === 'messenger'} onClick={() => setView('messenger')} icon={<MessageCircle size={18} />} />
           </div>
+
+          {/* Language switcher */}
+          <button
+            onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
+            className="flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-bold text-ink-300 transition-colors hover:bg-ink-800 hover:text-gold-200"
+            title={lang === 'en' ? 'Switch to Arabic' : 'Switch to English'}
+          >
+            <Languages size={16} />
+            {lang === 'en' ? 'EN' : 'ع'}
+          </button>
 
           {/* Go Live in header */}
           <button
@@ -139,6 +153,14 @@ export function AppShell() {
       {/* Global overlays */}
       <GoLiveModal />
       <StreamViewer />
+      <VideoUploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} />
+      <VideoCallModal
+        open={callPeerId !== null}
+        onClose={() => setCallPeerId(null)}
+        peerId={callPeerId ?? ''}
+        groupLabel={callGroupLabel ?? undefined}
+        isGroup={callGroupLabel !== null && !callGroupLabel.includes('call with')}
+      />
     </div>
   );
 }

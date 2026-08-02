@@ -1,6 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
@@ -31,6 +32,44 @@ export default {
           800: '#4d3d12',
           900: '#2a220a',
         },
+        maroon: {
+          50: '#fdf2f3',
+          100: '#fce4e7',
+          200: '#f9c9d0',
+          300: '#f4a3ad',
+          400: '#ec6f80',
+          500: '#d94555',
+          600: '#be2d3d',
+          700: '#9a2230',
+          800: '#7e1d29',
+          900: '#5a1520',
+          950: '#3a0d16',
+        },
+        parchment: {
+          50: '#fefcf3',
+          100: '#faf5e4',
+          200: '#f3e9c8',
+          300: '#ead8a0',
+          400: '#dcc46f',
+          500: '#c9a94e',
+          600: '#a8853a',
+          700: '#856530',
+          800: '#5e4822',
+          900: '#3a2c15',
+        },
+        stone: {
+          50: '#f6f5f3',
+          100: '#e9e7e2',
+          200: '#d4d0c8',
+          300: '#b8b2a6',
+          400: '#9a9384',
+          500: '#7d7563',
+          600: '#635d4f',
+          700: '#4e4a3f',
+          800: '#3a372f',
+          900: '#2a2823',
+          950: '#1a1916',
+        },
       },
       fontFamily: {
         sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
@@ -40,6 +79,7 @@ export default {
         gold: '0 0 0 1px rgba(212,175,55,0.4), 0 8px 30px rgba(212,175,55,0.18)',
         glow: '0 0 24px rgba(212,175,55,0.35)',
         card: '0 10px 40px -12px rgba(0,0,0,0.6)',
+        maroon: '0 0 0 1px rgba(154,34,48,0.4), 0 8px 30px rgba(154,34,48,0.18)',
       },
       animation: {
         'pulse-gold': 'pulseGold 2s cubic-bezier(0.4,0,0.6,1) infinite',
@@ -49,6 +89,7 @@ export default {
         'scale-in': 'scaleIn 0.25s cubic-bezier(0.16,1,0.3,1)',
         'live-blink': 'liveBlink 1.4s ease-in-out infinite',
         'shimmer': 'shimmer 2.5s linear infinite',
+        'story-glow': 'storyGlow 2s ease-in-out infinite',
       },
       keyframes: {
         pulseGold: {
@@ -66,6 +107,10 @@ export default {
         shimmer: {
           '0%': { backgroundPosition: '-1000px 0' },
           '100%': { backgroundPosition: '1000px 0' },
+        },
+        storyGlow: {
+          '0%,100%': { boxShadow: '0 0 8px rgba(212,175,55,0.4)' },
+          '50%': { boxShadow: '0 0 16px rgba(212,175,55,0.7)' },
         },
       },
     },

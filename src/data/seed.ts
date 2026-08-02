@@ -43,6 +43,9 @@ export const seedUsers: User[] = [
     joinedAt: now - 120 * DAY,
     onboarded: true,
     online: true,
+    following: ['u_michael', 'u_maria', 'u_peter', 'u_elena', 'u_theresa'],
+    followers: ['u_michael', 'u_maria', 'u_elena', 'u_sophia', 'u_andrew'],
+    verified: true,
   },
   {
     id: 'u_michael',
@@ -56,6 +59,8 @@ export const seedUsers: User[] = [
     joinedAt: now - 90 * DAY,
     onboarded: true,
     online: true,
+    following: ['u_admin', 'u_maria', 'u_sophia', 'u_andrew'],
+    followers: ['u_admin', 'u_maria', 'u_sophia'],
   },
   {
     id: 'u_maria',
@@ -69,6 +74,8 @@ export const seedUsers: User[] = [
     joinedAt: now - 80 * DAY,
     onboarded: true,
     online: true,
+    following: ['u_admin', 'u_michael'],
+    followers: ['u_admin', 'u_michael', 'u_elena'],
   },
   {
     id: 'u_peter',
@@ -82,11 +89,13 @@ export const seedUsers: User[] = [
     joinedAt: now - 70 * DAY,
     onboarded: true,
     online: false,
+    following: ['u_admin', 'u_elena'],
+    followers: ['u_admin', 'u_elena'],
   },
   {
     id: 'u_elena',
     email: 'elena.samaras@example.com',
-    name: 'Eena Samaras',
+    name: 'Elena Samaras',
     age: 31,
     photo: avatar(4),
     parish: 'Holy Trinity Greek Orthodox Church',
@@ -95,6 +104,8 @@ export const seedUsers: User[] = [
     joinedAt: now - 60 * DAY,
     onboarded: true,
     online: true,
+    following: ['u_admin', 'u_peter', 'u_theresa', 'u_maria'],
+    followers: ['u_admin', 'u_peter', 'u_maria', 'u_theresa'],
   },
   {
     id: 'u_daniel',
@@ -108,6 +119,8 @@ export const seedUsers: User[] = [
     joinedAt: now - 45 * DAY,
     onboarded: true,
     online: false,
+    following: ['u_sophia', 'u_justin'],
+    followers: ['u_sophia', 'u_justin'],
   },
   {
     id: 'u_sophia',
@@ -121,6 +134,8 @@ export const seedUsers: User[] = [
     joinedAt: now - 30 * DAY,
     onboarded: true,
     online: true,
+    following: ['u_admin', 'u_michael', 'u_daniel'],
+    followers: ['u_admin', 'u_michael', 'u_daniel'],
   },
   {
     id: 'u_andrew',
@@ -134,6 +149,8 @@ export const seedUsers: User[] = [
     joinedAt: now - 14 * DAY,
     onboarded: true,
     online: true,
+    following: ['u_admin', 'u_michael'],
+    followers: ['u_admin', 'u_michael'],
   },
   {
     id: 'u_theresa',
@@ -143,10 +160,12 @@ export const seedUsers: User[] = [
     photo: avatar(8),
     parish: 'Theotokos of Axion Estin Chapel',
     role: 'member',
-    bio: 'Khouriya. Hosting a women’s retreat this fall.',
+    bio: 'Khouriya. Hosting a women\u2019s retreat this fall.',
     joinedAt: now - 7 * DAY,
     onboarded: true,
     online: false,
+    following: ['u_admin', 'u_elena'],
+    followers: ['u_admin', 'u_elena'],
   },
   {
     id: 'u_justin',
@@ -160,6 +179,8 @@ export const seedUsers: User[] = [
     joinedAt: now - 2 * DAY,
     onboarded: true,
     online: true,
+    following: ['u_daniel'],
+    followers: ['u_daniel'],
   },
 ];
 
@@ -233,7 +254,7 @@ export const seedPosts: Post[] = [
   {
     id: 'p5',
     authorId: 'u_theresa',
-    text: 'Registration is open for the women’s retreat. Theme: “The Myrrh-bearing Women.” Reach out if you need a scholarship — no one turned away.',
+    text: 'Registration is open for the women\u2019s retreat. Theme: \u201cThe Myrrh-bearing Women.\u201d Reach out if you need a scholarship \u2014 no one turned away.',
     createdAt: now - 2 * DAY,
     likes: ['u_admin', 'u_elena', 'u_maria', 'u_sophia', 'u_peter'],
     comments: [
@@ -250,7 +271,7 @@ export const seedThreads: Thread[] = [
     messages: [
       { id: 'm1', threadId: 't_admin_michael', senderId: 'u_michael', text: 'Father, are you going live for Bible study tonight?', createdAt: now - 5 * HOUR, read: true },
       { id: 'm2', threadId: 't_admin_michael', senderId: 'u_admin', text: 'Yes — 8pm sharp. Tagging it “Wednesday Bible Study”.', createdAt: now - 4.8 * HOUR, read: true },
-      { id: 'm3', threadId: 't_admin_michael', senderId: 'u_michael', text: 'Perfect, I’ll share it in the youth group chat.', createdAt: now - 4.5 * HOUR, read: false },
+      { id: 'm3', threadId: 't_admin_michael', senderId: 'u_michael', text: 'Perfect, I\u2019ll share it in the youth group chat.', createdAt: now - 4.5 * HOUR, read: false },
     ],
   },
   {
@@ -300,7 +321,7 @@ export const seedEvents: CalendarEvent[] = [
   },
   {
     id: 'e2',
-    title: 'Women’s Retreat: The Myrrh-bearing Women',
+    title: 'Women\u2019s Retreat: The Myrrh-bearing Women',
     parish: 'Theotokos of Axion Estin Chapel',
     date: isoDate(now + 9 * DAY),
     time: '10:00',

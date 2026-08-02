@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Noto+Naskh+Arabic:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -14,15 +16,111 @@ body,
 
 body {
   margin: 0;
-  background-color: #0a0c12;
-  color: #e7e9ee;
+  background-color: var(--bg-base, #0a0c12);
+  color: var(--text-base, #e7e9ee);
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+html[lang="ar"] body {
+  font-family: 'Noto Naskh Arabic', 'Plus Jakarta Sans', system-ui, sans-serif;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* ---- Theme: Dark (default) ---- */
+.theme-dark {
+  --bg-base: #0a0c12;
+  --bg-card: #13171f;
+  --bg-elevated: #181c25;
+  --bg-input: #0f1218;
+  --text-base: #e7e9ee;
+  --text-muted: #7a8494;
+  --text-faint: #515b6b;
+  --border-base: #222834;
+  --border-hover: #2b323f;
+  --accent: #d4af37;
+  --accent-hover: #e8c75a;
+  --accent-soft: rgba(212, 175, 55, 0.1);
+  --danger: #d94555;
+  --font-serif: 'Cormorant Garamond', Georgia, serif;
+  color-scheme: dark;
+}
+
+/* ---- Theme: Light ---- */
+.theme-light {
+  --bg-base: #faf5e4;
+  --bg-card: #fefcf3;
+  --bg-elevated: #f3e9c8;
+  --bg-input: #faf5e4;
+  --text-base: #2a2823;
+  --text-muted: #635d4f;
+  --text-faint: #9a9384;
+  --border-base: #e9e7e2;
+  --border-hover: #d4d0c8;
+  --accent: #99791f;
+  --accent-hover: #735c1a;
+  --accent-soft: rgba(153, 121, 31, 0.1);
+  --danger: #be2d3d;
+  --font-serif: 'Cormorant Garamond', Georgia, serif;
+  color-scheme: light;
+}
+
+/* ---- Theme: Ancient (First-Century / Monastic) ---- */
+.theme-ancient {
+  --bg-base: #efe6d5;
+  --bg-card: #f4eae1;
+  --bg-elevated: #e8dcc6;
+  --bg-input: #f0e7d8;
+  --text-base: #2a2520;
+  --text-muted: #6b5d4a;
+  --text-faint: #9a8a72;
+  --border-base: #d4c4a8;
+  --border-hover: #b8a78a;
+  --accent: #856530;
+  --accent-hover: #5e4822;
+  --accent-soft: rgba(133, 101, 48, 0.12);
+  --danger: #9a2230;
+  --font-serif: 'EB Garamond', 'Cormorant Garamond', Georgia, serif;
+  --ancient-texture: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23856530' fill-opacity='0.04'%3E%3Cpath d='M40 5 L45 20 L60 20 L48 30 L52 45 L40 36 L28 45 L32 30 L20 20 L35 20 Z'/%3E%3C/g%3E%3C/svg%3E");
+  color-scheme: light;
+}
+
+.theme-ancient body,
+.theme-ancient .card,
+.theme-ancient .ancient-texture {
+  background-image: var(--ancient-texture);
+  background-repeat: repeat;
+}
+
+/* Ancient mode serif headings */
+.theme-ancient h1,
+.theme-ancient h2,
+.theme-ancient h3,
+.theme-ancient .font-serif {
+  font-family: 'EB Garamond', 'Cormorant Garamond', Georgia, serif !important;
+  letter-spacing: 0.01em;
+}
+
+/* Ancient mode gold/copper accent text */
+.theme-ancient .gold-text {
+  background: linear-gradient(135deg, #856530, #a8853a, #856530);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.theme-ancient .gold-btn {
+  background: linear-gradient(to bottom, #a8853a, #856530);
+  color: #f4eae1;
+}
+
+.theme-ancient .gold-ring {
+  box-shadow: 0 0 0 2px rgba(133, 101, 48, 0.55), 0 0 0 4px rgba(244, 234, 225, 0.9);
 }
 
 /* Slim, premium scrollbar */
@@ -34,7 +132,7 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(212, 175, 55, 0.25);
+  background: var(--accent-soft);
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
@@ -81,5 +179,34 @@ body {
   }
   .gold-ring {
     box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.55), 0 0 0 4px rgba(10, 12, 18, 0.9);
+  }
+  .snap-y-mandatory {
+    scroll-snap-type: y mandatory;
+  }
+  .snap-start {
+    scroll-snap-align: start;
+  }
+  .snap-center {
+    scroll-snap-align: center;
+  }
+  /* Sacred geometry background pattern */
+  .sacred-geometry {
+    background-image: url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23d4af37' stroke-opacity='0.04' stroke-width='1'%3E%3Ccircle cx='60' cy='60' r='40'/%3E%3Ccircle cx='60' cy='60' r='25'/%3E%3Cpath d='M60 20 L60 100 M20 60 L100 60 M32 32 L88 88 M88 32 L32 88'/%3E%3C/g%3E%3C/svg%3E");
+    background-repeat: repeat;
+  }
+  /* Parchment texture overlay */
+  .parchment-overlay {
+    background-image: url("data:image/svg+xml,%3Csvg width='200' height='200' viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23d4af37' fill-opacity='0.03'%3E%3Cpath d='M100 10 L110 40 L140 40 L116 58 L126 88 L100 70 L74 88 L84 58 L60 40 L90 40 Z'/%3E%3C/g%3E%3C/svg%3E");
+    background-repeat: repeat;
+  }
+  /* RTL helpers */
+  html[dir="rtl"] .rtl-flip {
+    transform: scaleX(-1);
+  }
+  html[dir="rtl"] .rtl-text-right {
+    text-align: right;
+  }
+  html[dir="rtl"] .rtl-flex-row-reverse {
+    flex-direction: row-reverse;
   }
 }
