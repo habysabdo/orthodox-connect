@@ -3,11 +3,11 @@ import react from '@vitejs/plugin-react';
 import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
-  base: '/',
+  base: './', // Use relative pathing for static deployment targets like Cloudflare Pages
   plugins: [react()],
   build: {
     outDir: 'dist',
-    emptyOutDir: true, // Cleans dist/ before building to prevent stale hash mismatches
+    emptyOutDir: true,
     rollupOptions: {
       output: {
         manualChunks: undefined,
