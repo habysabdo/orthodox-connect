@@ -3,7 +3,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./components/Login";
 import { AppShell } from "./components/AppShell";
-import Landing from "./components/Landing";
+import { Landing } from "./components/Landing";
 
 /* ------------------------------------------------------------------ */
 /*  Login route — redirects to app shell if already authenticated    */
