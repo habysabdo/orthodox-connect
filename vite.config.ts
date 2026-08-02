@@ -7,9 +7,9 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: 'dist',
+    emptyOutDir: true, // Cleans dist/ before building to prevent stale hash mismatches
     rollupOptions: {
       output: {
-        // Disables creating separate lazy chunk files that get blocked by Cloudflare Pages SPA routes
         manualChunks: undefined,
       },
     },
