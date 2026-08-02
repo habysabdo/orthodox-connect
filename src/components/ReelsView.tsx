@@ -12,6 +12,7 @@ import {
 import { Avatar } from './ui';
 import { useStore } from '@/store/context';
 import { seedReels } from '@/data/content';
+import { loadReels } from '@/utils/posts';
 import { timeAgo } from '@/utils/format';
 import type { Comment, VideoReel } from '@/types';
 
@@ -23,6 +24,35 @@ export function ReelsView() {
   const [reels, setReels] = useState<VideoReel[]>(seedReels);
   const [commentOpen, setCommentOpen] = useState<string | null>(null);
   const [following, setFollowing] = useState<string[]>([]);
+
+  // Load video/image reels from Supabase and merge with seed content
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const dbReels = await loadReels();
+        if (cancelled || dbReels.length === 0) return;
+        const mapped: VideoReel[] = dbReels.map((p) => ({
+          id: p.id,
+          authorId: p.authorId,
+          authorName: p.authorName ?? 'Unknown',
+          authorPhoto: p.authorAvatar ?? '',
+          mediaUrl: p.image ?? '',
+          mediaType: 'image',
+          caption: p.text,
+          hashtags: [],
+          createdAt: p.createdAt,
+          likes: p.likes,
+          comments: p.comments,
+          bookmarks: [],
+        }));
+        setReels((prev) => [...mapped, ...prev]);
+      } catch {
+        // silently fall back to seed reels
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Track which reel is in view via IntersectionObserver
   useEffect(() => {

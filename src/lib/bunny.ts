@@ -1,26 +1,41 @@
 /**
- * Bunny Stream upload helper.
+ * Bunny Stream video helpers for OrthodoxConnect.
  *
- * Bunny Stream uses a pull-based or direct-upload API. For direct uploads,
- * you create an upload session via the Bunny Stream API and get back a
- * upload URL that the browser can PUT to directly.
+ * Production library ID: 713265
+ * Stream dashboard: https://dash.bunny.net/stream/713265
+ * CDN playback host:    https://vz-713265.b-cdn.net
+ * Embed host:           https://video.bunnycdn.com/embed/713265
  *
- * Required env vars (set in .env):
- *   VITE_BUNNY_LIBRARY_ID   — your Bunny Stream library ID
- *   VITE_BUNNY_API_KEY      — your Bunny Stream API key
- *
- * If env vars are not configured, `uploadToBunny` returns null and the
- * caller should fall back to Supabase Storage.
+ * Env vars (optional — set in .env):
+ *   VITE_BUNNY_LIBRARY_ID  — Bunny Stream library ID (default: 713265)
+ *   VITE_BUNNY_API_KEY     — Bunny Stream API key (needed for uploads)
  */
 
-const LIBRARY_ID = import.meta.env.VITE_BUNNY_LIBRARY_ID ?? '';
+const LIBRARY_ID = import.meta.env.VITE_BUNNY_LIBRARY_ID || '713265';
 const API_KEY = import.meta.env.VITE_BUNNY_API_KEY ?? '';
-const BUNNY_HOST = 'video.bunnycdn.com';
+const BUNNY_HOST = 'dash.bunny.net';
+const BUNNY_API_HOST = 'video.bunnycdn.com';
+const CDN_HOST = `vz-${LIBRARY_ID}.b-cdn.net`;
 
 interface BunnyUploadResult {
   guid: string;
   videoId: string;
   videoLibraryId: string;
+}
+
+/** Build the embed URL for a Bunny Stream video. */
+export function bunnyEmbedUrl(videoId: string): string {
+  return `https://${BUNNY_API_HOST}/embed/${LIBRARY_ID}/${videoId}`;
+}
+
+/** Build the HLS playlist URL for a Bunny Stream video. */
+export function bunnyHlsUrl(videoId: string): string {
+  return `https://${CDN_HOST}/${videoId}/playlist.m3u8`;
+}
+
+/** Build a thumbnail URL for a Bunny Stream video. */
+export function bunnyThumbnailUrl(videoId: string): string {
+  return `https://${CDN_HOST}/${videoId}/thumbnail.jpg`;
 }
 
 /**
@@ -31,7 +46,7 @@ export async function createBunnyVideo(filename: string, title: string): Promise
   if (!LIBRARY_ID || !API_KEY) return null;
 
   try {
-    const res = await fetch(`https://${BUNNY_HOST}/library/${LIBRARY_ID}/videos`, {
+    const res = await fetch(`https://${BUNNY_API_HOST}/library/${LIBRARY_ID}/videos`, {
       method: 'POST',
       headers: {
         'AccessKey': API_KEY,
@@ -42,7 +57,7 @@ export async function createBunnyVideo(filename: string, title: string): Promise
 
     if (!res.ok) return null;
     const data = await res.json() as BunnyUploadResult;
-    const uploadUrl = `https://${BUNNY_HOST}/library/${LIBRARY_ID}/videos/${data.guid}`;
+    const uploadUrl = `https://${BUNNY_API_HOST}/library/${LIBRARY_ID}/videos/${data.guid}`;
     return { uploadUrl, videoId: data.guid };
   } catch {
     return null;
@@ -69,10 +84,7 @@ export async function uploadToBunny(file: File, title: string): Promise<string |
 
     if (!res.ok) return null;
 
-    // Return the embed/playback URL
-    // Bunny Stream embed: https://video.bunnycdn.com/embed/{libraryId}/{videoId}
-    // Or HLS: https://vz-xxx.b-cdn.net/{videoId}/playlist.m3u8
-    return `https://video.bunnycdn.com/embed/${LIBRARY_ID}/${session.videoId}`;
+    return bunnyEmbedUrl(session.videoId);
   } catch {
     return null;
   }
@@ -80,4 +92,12 @@ export async function uploadToBunny(file: File, title: string): Promise<string |
 
 export function isBunnyConfigured(): boolean {
   return Boolean(LIBRARY_ID && API_KEY);
+}
+
+export function getBunnyLibraryId(): string {
+  return LIBRARY_ID;
+}
+
+export function getBunnyStreamDashboard(): string {
+  return `https://${BUNNY_HOST}/stream/${LIBRARY_ID}`;
 }

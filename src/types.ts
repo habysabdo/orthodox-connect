@@ -35,6 +35,8 @@ export interface Post {
   id: string;
   authorId: string;
   authorName?: string;
+  authorParish?: string;
+  authorAvatar?: string;
   text: string;
   image?: string;
   /** optional video URL for reels-style content */
