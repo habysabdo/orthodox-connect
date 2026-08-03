@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ImagePlus, MessageCircle, Mic, Phone, Send, Trash2, Video } from 'lucide-react';
 import { Avatar, EmptyState } from './ui';
@@ -6,15 +6,22 @@ import { useStore, friendsOf, threadIdFor, unreadCountFor } from '@/store/contex
 import type { ChatMessage } from '@/types';
 import { useUI } from '@/store/ui';
 import { clockTime, timeAgo } from '@/utils/format';
+import { loadMessages, sendMessage as dbSend, markThreadRead, subscribeToThread } from '@/utils/messages';
+import { useAuth } from '@/store/auth';
+import { useToast } from './Toast';
 
 export function MessengerView() {
   const state = useStore();
   const { openThreadId, setOpenThreadId, setCallPeerId, setCallGroupLabel } = useUI();
+  const { profile } = useAuth();
+  const { notify } = useToast();
   const me = state.users.find((u) => u.id === state.currentUserId);
   const [draft, setDraft] = useState('');
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [dbMessages, setDbMessages] = useState<Record<string, ChatMessage[]>>({});
+  const [sending, setSending] = useState(false);
 
   const friends = friendsOf(state, me?.id ?? '');
   const myThreads = state.threads.filter((t) => me && t.participantIds.includes(me.id));
@@ -27,32 +34,92 @@ export function MessengerView() {
     return { friend: f, thread, last, unread, tid };
   }).sort((a, b) => (b.last?.createdAt ?? 0) - (a.last?.createdAt ?? 0));
 
+  // Merge in-memory and Supabase messages, dedup by id
+  const allMessages: ChatMessage[] = (() => {
+    if (!activeThread) return [];
+    const inMem = activeThread.messages;
+    const db = dbMessages[activeThread.id] ?? [];
+    const seen = new Set<string>();
+    const merged: ChatMessage[] = [];
+    for (const m of [...inMem, ...db]) {
+      if (!seen.has(m.id)) {
+        seen.add(m.id);
+        merged.push(m);
+      }
+    }
+    return merged.sort((a, b) => a.createdAt - b.createdAt);
+  })();
+
   const activeThread = openThreadId ? state.threads.find((t) => t.id === openThreadId) : undefined;
   const activeFriend = activeThread
     ? state.users.find((u) => u.id === activeThread.participantIds.find((id) => id !== me?.id))
     : undefined;
 
+  // Load messages from Supabase when a thread is opened
   useEffect(() => {
-    if (activeThread) {
+    if (!activeThread || !me) return;
+    const tid = activeThread.id;
+    if (dbMessages[tid]) return; // already loaded
+    loadMessages(tid)
+      .then((msgs) => {
+        setDbMessages((prev) => ({ ...prev, [tid]: msgs }));
+      })
+      .catch(() => {
+        // silently fall back to in-memory messages
+      });
+  }, [activeThread?.id, me?.id]);
+
+  // Subscribe to new messages via realtime
+  useEffect(() => {
+    if (!activeThread || !me) return;
+    const unsub = subscribeToThread(activeThread.id, (msg) => {
+      setDbMessages((prev) => {
+        const existing = prev[activeThread.id] ?? [];
+        if (existing.some((m) => m.id === msg.id)) return prev;
+        return { ...prev, [activeThread.id]: [...existing, msg] };
+      });
+    });
+    return unsub;
+  }, [activeThread?.id, me?.id]);
+
+  // Mark thread read when messages change
+  useEffect(() => {
+    if (activeThread && me && profile) {
       state.markThreadRead(activeThread.id);
+      markThreadRead(activeThread.id, profile.id).catch(() => {});
     }
-  }, [activeThread?.id, activeThread?.messages.length]);
+  }, [activeThread?.id, activeThread?.messages.length, profile?.id]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [activeThread?.messages.length]);
+  }, [activeThread?.messages.length, dbMessages]);
 
   if (!me) return null;
 
-  const send = () => {
-    if (!draft.trim() || !activeThread) return;
-    state.sendMessage(activeThread.id, draft.trim());
+  const send = useCallback(async () => {
+    if (!draft.trim() || !activeThread || !me || sending) return;
+    const text = draft.trim();
     setDraft('');
-  };
+    setSending(true);
+    // Optimistic: add to in-memory store immediately
+    state.sendMessage(activeThread.id, text);
+    // Persist to Supabase if user is authenticated
+    if (profile?.id && activeFriend) {
+      try {
+        await dbSend(activeThread.id, profile.id, activeFriend.id, text);
+      } catch {
+        notify('error', 'Message saved locally but not delivered.');
+      }
+    }
+    setSending(false);
+  }, [draft, activeThread, me, sending, profile?.id, activeFriend, state, notify]);
 
   const sendMedia = (mediaUrl: string) => {
     if (!activeThread) return;
     state.sendMessage(activeThread.id, `[photo] ${mediaUrl}`);
+    if (profile?.id && activeFriend) {
+      dbSend(activeThread.id, profile.id, activeFriend.id, `[photo] ${mediaUrl}`).catch(() => {});
+    }
     setMediaPreview(null);
   };
 
@@ -170,7 +237,7 @@ export function MessengerView() {
               {activeFriend.parish}
             </div>
             <AnimatePresence initial={false}>
-              {activeThread.messages.map((m: ChatMessage) => {
+              {allMessages.map((m: ChatMessage) => {
                 const mine = m.senderId === me.id;
                 const media = isMediaMessage(m.text);
                 return (
@@ -213,7 +280,7 @@ export function MessengerView() {
                 );
               })}
             </AnimatePresence>
-            {activeThread.messages.length === 0 && (
+            {allMessages.length === 0 && (
               <div className="flex flex-col items-center justify-center py-12 text-center text-sm text-ink-400">
                 Say hello to {activeFriend.name.split(' ')[0]}
               </div>
