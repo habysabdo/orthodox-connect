@@ -24,13 +24,16 @@ export function MessengerView() {
   const [sending, setSending] = useState(false);
 
   const friends = friendsOf(state, me?.id ?? '');
-  const myThreads = state.threads.filter((t) => me && t.participantIds.includes(me.id));
+  const activeThread = openThreadId ? state.threads.find((thread) => thread.id === openThreadId) : undefined;
+  const activeFriend = activeThread
+    ? state.users.find((user) => user.id === activeThread.participantIds.find((id) => id !== me?.id))
+    : undefined;
 
   const conversations = friends.map((f) => {
-    const tid = threadIdFor(me!.id, f.id);
+    const tid = threadIdFor(me?.id ?? '', f.id);
     const thread = state.threads.find((t) => t.id === tid);
     const last = thread?.messages[thread.messages.length - 1];
-    const unread = thread ? thread.messages.filter((m: ChatMessage) => m.senderId !== me!.id && !m.read).length : 0;
+    const unread = thread ? thread.messages.filter((m: ChatMessage) => m.senderId !== me?.id && !m.read).length : 0;
     return { friend: f, thread, last, unread, tid };
   }).sort((a, b) => (b.last?.createdAt ?? 0) - (a.last?.createdAt ?? 0));
 
@@ -49,11 +52,6 @@ export function MessengerView() {
     }
     return merged.sort((a, b) => a.createdAt - b.createdAt);
   })();
-
-  const activeThread = openThreadId ? state.threads.find((t) => t.id === openThreadId) : undefined;
-  const activeFriend = activeThread
-    ? state.users.find((u) => u.id === activeThread.participantIds.find((id) => id !== me?.id))
-    : undefined;
 
   // Load messages from Supabase when a thread is opened
   useEffect(() => {
@@ -94,25 +92,26 @@ export function MessengerView() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [activeThread?.messages.length, dbMessages]);
 
-  if (!me) return null;
-
   const send = useCallback(async () => {
     if (!draft.trim() || !activeThread || !me || sending) return;
     const text = draft.trim();
     setDraft('');
     setSending(true);
-    // Optimistic: add to in-memory store immediately
-    state.sendMessage(activeThread.id, text);
-    // Persist to Supabase if user is authenticated
-    if (profile?.id && activeFriend) {
-      try {
+    try {
+      state.sendMessage(activeThread.id, text);
+      if (profile?.id && activeFriend) {
         await dbSend(activeThread.id, profile.id, activeFriend.id, text);
-      } catch {
+      }
+    } catch {
+      if (profile?.id && activeFriend) {
         notify('error', 'Message saved locally but not delivered.');
       }
+    } finally {
+      setSending(false);
     }
-    setSending(false);
   }, [draft, activeThread, me, sending, profile?.id, activeFriend, state, notify]);
+
+  if (!me) return null;
 
   const sendMedia = (mediaUrl: string) => {
     if (!activeThread) return;
@@ -166,7 +165,7 @@ export function MessengerView() {
               No conversations yet. Add friends to start messaging.
             </div>
           ) : (
-            conversations.map(({ friend, thread, last, unread, tid }) => (
+            conversations.map(({ friend, last, unread, tid }) => (
               <button
                 key={friend.id}
                 onClick={() => openConv(tid, friend.id)}
