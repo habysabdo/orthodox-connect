@@ -112,6 +112,16 @@ export function AdminView() {
     setActionLoading(null);
   };
 
+  const filteredProfiles = useMemo(() => {
+    if (!search.trim()) return profiles;
+    const query = search.toLowerCase();
+    return profiles.filter((profileItem) =>
+      profileItem.display_name?.toLowerCase().includes(query) ||
+      profileItem.email?.toLowerCase().includes(query) ||
+      profileItem.parish?.toLowerCase().includes(query)
+    );
+  }, [profiles, search]);
+
   if (!me || !isAdmin) {
     return (
       <div className="card flex flex-col items-center justify-center py-16 text-center">
@@ -144,16 +154,6 @@ export function AdminView() {
     setAlertTitle(''); setAlertBody(''); setAlertLevel('info'); setAlertOpen(false);
     notify('success', 'Alert published.');
   };
-
-  const filteredProfiles = useMemo(() => {
-    if (!search.trim()) return profiles;
-    const q = search.toLowerCase();
-    return profiles.filter((p) =>
-      p.display_name?.toLowerCase().includes(q) ||
-      p.email?.toLowerCase().includes(q) ||
-      p.parish?.toLowerCase().includes(q)
-    );
-  }, [profiles, search]);
 
   return (
     <div className="space-y-4">
